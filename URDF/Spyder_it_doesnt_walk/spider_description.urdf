@@ -5,7 +5,7 @@
   <link name="base_link">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.5"/>
+      <mass value="0.05"/>
       <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.0015" iyz="0" izz="0.001"/>
     </inertial>
     <visual>
@@ -33,13 +33,13 @@
     <parent link="base_link"/>
     <child link="FL_hip_link"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-0.785" upper="0.785" effort="20" velocity="1.57"/>
+    <limit lower="-0.785" upper="0.785" effort="1"/>
   </joint>
 
   <link name="FL_hip_link">
     <inertial>
       <origin xyz="0.01565 0 -0.01755" rpy="0 0 0"/>
-      <mass value="0.05"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00005" ixy="0" ixz="0" iyy="0.00007" iyz="0" izz="0.00005"/>
     </inertial>
     <visual>
@@ -65,13 +65,13 @@
     <parent link="FL_hip_link"/>
     <child link="FL_thigh_link"/>
     <axis xyz="0 -1 0"/>
-    <limit lower="-0.9" upper="0.9" effort="20" velocity="1.57"/>
+    <limit lower="-0.9" upper="0.9" effort="1"/>
   </joint>
 
   <link name="FL_thigh_link">
     <inertial>
       <origin xyz="0.01875 0 0" rpy="0 0 1.57"/>
-      <mass value="0.03"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00003" ixy="0" ixz="0" iyy="0.00004" iyz="0" izz="0.00002"/>
     </inertial>
     <visual>
@@ -97,13 +97,13 @@
     <parent link="FL_thigh_link"/>
     <child link="FL_calf_link"/>
     <axis xyz="0 -1 0"/>
-    <limit lower="-0.3" upper="1.57" effort="20" velocity="1.57"/>
+    <limit lower="-0.3" upper="1.57" effort="1"/>
   </joint>
 
   <link name="FL_calf_link">
     <inertial>
       <origin xyz="0.039978 0 0.003" rpy="0 0 0"/>
-      <mass value="0.02"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00002" iyz="0" izz="0.00001"/>
     </inertial>
     <visual>
@@ -131,13 +131,13 @@
     <parent link="base_link"/>
     <child link="RL_hip_link"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-0.785" upper="0.785" effort="20" velocity="1.57"/>
+    <limit lower="-0.785" upper="0.785" effort="1"/>
   </joint>
 
   <link name="RL_hip_link">
     <inertial>
       <origin xyz="0.01565 0 -0.01755" rpy="0 0 0"/>
-      <mass value="0.05"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00005" ixy="0" ixz="0" iyy="0.00007" iyz="0" izz="0.00005"/>
     </inertial>
     <visual>
@@ -163,13 +163,13 @@
     <parent link="RL_hip_link"/>
     <child link="RL_thigh_link"/>
     <axis xyz="0 -1 0"/>
-    <limit lower="-0.9" upper="0.9" effort="20" velocity="1.57"/>
+    <limit lower="-0.9" upper="0.9" effort="1"/>
   </joint>
 
   <link name="RL_thigh_link">
     <inertial>
       <origin xyz="0.01875 0 0" rpy="0 0 1.57"/>
-      <mass value="0.03"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00003" ixy="0" ixz="0" iyy="0.00004" iyz="0" izz="0.00002"/>
     </inertial>
     <visual>
@@ -195,13 +195,13 @@
     <parent link="RL_thigh_link"/>
     <child link="RL_calf_link"/>
     <axis xyz="0 -1 0"/>
-    <limit lower="-0.3" upper="1.57" effort="20" velocity="1.57"/>
+    <limit lower="-0.3" upper="1.57" effort="1"/>
   </joint>
 
   <link name="RL_calf_link">
     <inertial>
       <origin xyz="0.039978 0 0.003" rpy="0 0 0"/>
-      <mass value="0.02"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00002" iyz="0" izz="0.00001"/>
     </inertial>
     <visual>
@@ -229,13 +229,13 @@
     <parent link="base_link"/>
     <child link="FR_hip_link"/>
     <axis xyz="0 0 -1"/>
-    <limit lower="-0.785" upper="0.785" effort="20" velocity="1.57"/>
+    <limit lower="-0.785" upper="0.785" effort="1"/>
   </joint>
 
   <link name="FR_hip_link">
     <inertial>
       <origin xyz="-0.01565 0 -0.01755" rpy="0 0 0"/>
-      <mass value="0.05"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00005" ixy="0" ixz="0" iyy="0.00007" iyz="0" izz="0.00005"/>
     </inertial>
     <visual>
@@ -261,13 +261,13 @@
     <parent link="FR_hip_link"/>
     <child link="FR_thigh_link"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-0.9" upper="0.9" effort="20" velocity="1.57"/>
+    <limit lower="-0.9" upper="0.9" effort="1" />
   </joint>
 
   <link name="FR_thigh_link">
     <inertial>
       <origin xyz="-0.01875 0 0" rpy="0 0 1.57"/>
-      <mass value="0.03"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00003" ixy="0" ixz="0" iyy="0.00004" iyz="0" izz="0.00002"/>
     </inertial>
     <visual>
@@ -293,13 +293,13 @@
     <parent link="FR_thigh_link"/>
     <child link="FR_calf_link"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-0.3" upper="1.57" effort="20" velocity="1.57"/>
+    <limit lower="-0.3" upper="1.57" effort="1" />
   </joint>
 
   <link name="FR_calf_link">
     <inertial>
       <origin xyz="-0.039978 0 0.003" rpy="0 0 0"/>
-      <mass value="0.02"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00002" iyz="0" izz="0.00001"/>
     </inertial>
     <visual>
@@ -327,13 +327,13 @@
     <parent link="base_link"/>
     <child link="RR_hip_link"/>
     <axis xyz="0 0 -1"/>
-    <limit lower="-0.785" upper="0.785" effort="20" velocity="1.57"/>
+    <limit lower="-0.785" upper="0.785" effort="1" />
   </joint>
 
   <link name="RR_hip_link">
     <inertial>
       <origin xyz="-0.01565 0 -0.01755" rpy="0 0 0"/>
-      <mass value="0.05"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00005" ixy="0" ixz="0" iyy="0.00007" iyz="0" izz="0.00005"/>
     </inertial>
     <visual>
@@ -359,13 +359,13 @@
     <parent link="RR_hip_link"/>
     <child link="RR_thigh_link"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-0.9" upper="0.9" effort="20" velocity="1.57"/>
+    <limit lower="-0.9" upper="0.9" effort="1" />
   </joint>
 
   <link name="RR_thigh_link">
     <inertial>
       <origin xyz="-0.01875 0 0" rpy="0 0 1.57"/>
-      <mass value="0.03"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00003" ixy="0" ixz="0" iyy="0.00004" iyz="0" izz="0.00002"/>
     </inertial>
     <visual>
@@ -391,13 +391,13 @@
     <parent link="RR_thigh_link"/>
     <child link="RR_calf_link"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-0.3" upper="1.57" effort="20" velocity="1.57"/>
+    <limit lower="-0.3" upper="1.57" effort="1" />
   </joint>
 
   <link name="RR_calf_link">
     <inertial>
       <origin xyz="-0.039978 0 0.003" rpy="0 0 0"/>
-      <mass value="0.02"/>
+      <mass value="0.055"/>
       <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00002" iyz="0" izz="0.00001"/>
     </inertial>
     <visual>

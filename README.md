@@ -6,4 +6,26 @@ from starters i saw some vids on youtube but there 3d models are for expensive s
 <img src="/spider.png" weidth="480" height="240">
 
 ## Training Results
+
+### Initiate Training
+commands used for the training
+1. Itreartions = 1,00,000
+2. Num of Envs = 10,000
+```bash
+./isaaclab.sh -p /scripts/reinforcement_learning/rsl_rl/train.py --task Template-Spdrbot3-Direct-v0 --num_envs 10000 --max_iterations 100000 --headless
+```
+
+### Resume Training
+<i>example:
+
+```bash
+./isaaclab.sh -p /scripts/reinforcement_learning/rsl_rl/train.py --task Template-Spdrbot3-Direct-v0 --num_envs 10000 --max_iterations 100000 --headless --resume --load_log {} --checkpoint model_xxxx.pt
+``` 
+
+### Command to play with model
+
+```bash 
+./isaaclab.sh -p /scripts/reinforcement_learning/rsl_rl/play.py --task Template-Spdrbot3-Direct-v0 --num_envs 10 --load_log {} --checkpoint model_xxxx.pt 
+```
+
 Updates coming soon
