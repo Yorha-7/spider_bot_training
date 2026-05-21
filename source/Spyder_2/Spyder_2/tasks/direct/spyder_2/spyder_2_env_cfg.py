@@ -61,7 +61,7 @@ class Spdrbot3EnvCfg(DirectRLEnvCfg):
     decimation = 4
     action_scale = 0.25
     action_space = 12
-    observation_space = 48
+    observation_space = 30
     state_space = 0
 
     # simulation
