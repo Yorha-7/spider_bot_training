@@ -7,17 +7,12 @@ import gymnasium as gym
 
 from . import agents
 
-##
-# Register Gym environments.
-##
-
-
 gym.register(
-    id="Template-Spyder-2-Direct-v0",
-    entry_point=f"{__name__}.spyder_2_env:Spyder2Env",
+    id="spider_3",
+    entry_point=f"{__name__}.spyder_2_env:Spdrbot3Env",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.spyder_2_env_cfg:Spyder2EnvCfg",
+        "env_cfg_entry_point": f"{__name__}.spyder_2_env_cfg:Spdrbot3EnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
         "skrl_amp_cfg_entry_point": f"{agents.__name__}:skrl_amp_cfg.yaml",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",

@@ -3,6 +3,6 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from .rsl_rl_ppo_cfg import PPORunnerCfg
+from .spider import SPIDER_CFG
 
-__all__ = ["PPORunnerCfg"]
+__all__ = ["SPIDER_CFG"]

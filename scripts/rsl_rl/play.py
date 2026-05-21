@@ -34,6 +34,7 @@ parser.add_argument(
     help="Use the pre-trained checkpoint from Nucleus.",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument("--fixed_velocity", type=float, nargs=3, default=None, metavar=("X", "Y", "YAW"), help="Fixed velocity command (X, Y, Yaw). If not provided, uses random velocities.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -153,6 +154,22 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # wrap around environment for rsl-rl
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
+
+    # Set fixed velocity commands if provided
+    use_fixed_velocity = args_cli.fixed_velocity is not None
+    if use_fixed_velocity:
+        fixed_vel = torch.tensor(args_cli.fixed_velocity, device=env.unwrapped.device).unsqueeze(0).expand(env.unwrapped.num_envs, -1)
+        env.unwrapped._commands[:] = fixed_vel
+        print(f"[INFO] Fixed velocity command set to: X={args_cli.fixed_velocity[0]}, Y={args_cli.fixed_velocity[1]}, YAW={args_cli.fixed_velocity[2]}")
+        
+        # Patch reset to preserve fixed velocity after episode resets
+        original_reset_idx = env.unwrapped._reset_idx
+        def patched_reset_idx(env_ids):
+            original_reset_idx(env_ids)
+            env.unwrapped._commands[:] = fixed_vel
+        env.unwrapped._reset_idx = patched_reset_idx
+    else:
+        print("[INFO] Using random velocity commands")
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     # load previously trained model

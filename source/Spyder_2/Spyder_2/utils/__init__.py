@@ -3,6 +3,6 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from .rsl_rl_ppo_cfg import PPORunnerCfg
+from .keyboard_input import KeyboardInput
 
-__all__ = ["PPORunnerCfg"]
+__all__ = ["KeyboardInput"]
