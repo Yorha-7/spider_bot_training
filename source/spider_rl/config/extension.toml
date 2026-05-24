@@ -9,7 +9,7 @@ readme  = "README.md"
 
 title = "Spider Bot RL"
 author = "Jjateen Gundesha"
-maintainer = "Jjateen Gundesha"
+maintainer = "Jayesh Thakare"
 description="IsaacLab extension for 12-DOF spider robot locomotion training"
 repository = "https://github.com/Yorha-7/spider_bot_training.git"
 keywords = ["extension", "isaaclab", "spider", "locomotion", "rl"]
