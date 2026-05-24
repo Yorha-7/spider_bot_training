@@ -25,7 +25,7 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg
 
-from Spyder_2.assets.spider import SPIDER_CFG
+from spider_rl.assets.spider import SPIDER_CFG
 
 
 @configclass
@@ -55,7 +55,7 @@ class EventCfg:
 
 
 @configclass
-class Spdrbot3EnvCfg(DirectRLEnvCfg):
+class SpiderEnvCfg(DirectRLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 4

@@ -30,7 +30,7 @@ simulation_app = app_launcher.app
 import gymnasium as gym
 from isaaclab.envs import DirectRLEnv
 
-import Spyder_2.tasks  # noqa: F401
+import spider_rl.tasks  # noqa: F401
 
 
 def main():
@@ -65,7 +65,7 @@ def main():
         env.unwrapped.set_fixed_velocity(list(args_cli.fixed_velocity))
         print(f"[INFO] Fixed velocity: lin_x={args_cli.fixed_velocity[0]}, lin_y={args_cli.fixed_velocity[1]}, ang_z={args_cli.fixed_velocity[2]}")
     else:
-        from Spyder_2.utils import KeyboardInput
+        from spider_rl.utils import KeyboardInput
 
         keyboard = KeyboardInput()
         keyboard.start()
