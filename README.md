@@ -1,71 +1,104 @@
-# Spyder_2
+# Spider Bot Training
 
-Quadruped spider robot locomotion using PPO on NVIDIA Isaac Lab.
+Quadruped spider robot locomotion using PPO on [NVIDIA Isaac Lab](https://isaac-sim.github.io/IsaacLab).
 
-A 12-DOF spider robot trained with reinforcement learning for velocity-tracking locomotion, gait learning, and smooth walking policies.
+A 12-DOF SG90-based spider robot trained with reinforcement learning for velocity-tracking locomotion and trot gait coordination.
+
+<img src="assets/gifs/spider.gif" width="480">
 
 ## Features
 
-- **12-DOF spider robot** — 4 legs x 3 joints (hip, thigh, calf), modeled in URDF/USD
+- **12-DOF spider robot** — 4 legs × 3 joints (hip, thigh, calf), modeled in URDF/USD
 - **200 parallel environments** for efficient training
-- **PPO (RSL-RL & skrl)** with tuned hyperparameters
+- **PPO via RSL-RL and skrl** with tuned hyperparameters
 - **AMP support** via skrl
 - **11 reward terms** — velocity tracking, trot gait, smoothness, joint regularization
 - **Trot gait** — diagonal foot pairs (FL+RR, FR+RL)
 - **Keyboard teleoperation** — WASD + QE velocity control
-- **Checkpoint export** — PyTorch, TorchScript (JIT), ONNX
-- **TensorBoard logging** for reward analysis
+- **Checkpoint export** — JIT and ONNX
 
-## Quick Start
+## Repository Structure
+
+```
+spider_bot_training/
+├── assets/
+│   ├── gifs/             # demo recordings
+│   ├── images/           # static media
+│   └── usd/              # URDF and USD robot description files
+├── scripts/
+│   ├── rsl_rl/           # train.py, play.py, play_teleop.py, cli_args.py
+│   ├── skrl/             # train.py, play.py
+│   ├── random_agent.py
+│   ├── zero_agent.py
+│   ├── list_envs.py
+│   ├── train.sh          # interactive train launcher
+│   └── play.sh           # interactive play launcher
+└── source/
+    └── spider_rl/        # IsaacLab extension
+        ├── config/extension.toml
+        ├── setup.py
+        └── spider_rl/
+            ├── assets/spider.py        # robot articulation config
+            ├── tasks/direct/spider/    # RL env + agent configs
+            │   ├── spider_env.py
+            │   ├── spider_env_cfg.py
+            │   └── agents/
+            └── utils/keyboard_input.py
+```
+
+## Setup
 
 ```bash
-# Install the package
-python -m pip install -e source/Spyder_2
-
-# List available tasks
-python scripts/list_envs.py
-
-# Train
-python scripts/rsl_rl/train.py --task spider_3
-
-# Play a trained policy
-python scripts/rsl_rl/play.py --task spider_3
+# Install the extension
+python -m pip install -e source/spider_rl
 ```
 
-## Project Structure
+## Training
 
-```
-source/Spyder_2/
-  Spyder_2/
-    assets/spider.py          # Robot articulation config
-    tasks/direct/spyder_2/    # RL env, config, agent configs
-      spyder_2_env.py         # Main environment (DirectRLEnv)
-      spyder_2_env_cfg.py     # Env config (200 envs, 11 rewards)
-      agents/                 # PPO hyperparams (RSL-RL + skrl)
-    utils/keyboard_input.py   # Teleop input handler
-URDF/                         # Robot description (URDF + USD)
-scripts/
-  rsl_rl/train.py             # RSL-RL training
-  rsl_rl/play.py              # Play policy
-  rsl_rl/play_teleop.py       # Teleoperation mode
-  skrl/train.py               # skrl training
-  skrl/play.py                # skrl play
+```bash
+# RSL-RL
+python scripts/rsl_rl/train.py --task spider_3 --num_envs 200 --headless
+
+# skrl
+python scripts/skrl/train.py --task spider_3 --num_envs 200 --headless
+
+# Or use the interactive launcher
+bash scripts/train.sh
 ```
 
-## Configuration
+### Resume Training
 
-| Parameter | Value |
-|-----------|-------|
-| Task ID | `spider_3` |
-| Experiment | `spider_velocity_control` |
-| Action dim | 12 (joint targets) |
-| Obs dim | 48 |
-| Episode length | 20 s |
-| Physics dt | 200 Hz |
-| Action scale | 0.25 |
-| Parallel envs | 200 |
+```bash
+python scripts/rsl_rl/train.py --task spider_3 --resume \
+    --load_run <run_dir> --checkpoint model_xxxx.pt
+```
 
-## Rewards
+## Inference
+
+```bash
+python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path/to/model.pt>
+
+# Fixed velocity (X Y YAW)
+python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path> --fixed_velocity 0.5 0.0 0.0
+
+# Or use the interactive launcher
+bash scripts/play.sh
+```
+
+## Teleoperation
+
+```bash
+python scripts/rsl_rl/play_teleop.py --task spider_3
+```
+
+| Key | Action |
+|-----|--------|
+| W/S | Forward/Backward |
+| A/D | Strafe Left/Right |
+| Q/E | Turn Left/Right |
+| SPACE | Stop |
+
+## Reward Terms
 
 | Term | Scale | Purpose |
 |------|-------|---------|
@@ -81,32 +114,10 @@ scripts/
 | feet_air_time | 0.01 | Foot lift |
 | alternating_gait | 0.2 | Trot coordination |
 
-## Teleoperation
-
-```bash
-python scripts/rsl_rl/play_teleop.py --task spider_3
-```
-
-| Key | Action |
-|-----|--------|
-| W/S | Forward/Back |
-| A/D | Strafe left/right |
-| Q/E | Turn left/right |
-| SPACE | Stop |
-
-```bash
-# Fixed velocity mode
-python scripts/rsl_rl/play.py --task spider_3 --fixed_velocity 0.5 0.0 0.0
-```
-
 ## Development
 
 ```bash
-# Pre-commit (ruff formatting)
 pip install pre-commit
+pre-commit install
 pre-commit run --all-files
 ```
-
-## Acknowledgments
-
-Built on [NVIDIA Isaac Lab](https://isaac-sim.github.io/IsaacLab).

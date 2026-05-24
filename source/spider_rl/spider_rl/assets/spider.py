@@ -5,13 +5,18 @@ Total: 12 actuated joints.
 
 """
 
+import os
+
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 import isaaclab.sim as sim_utils
 
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
+_USD_PATH = os.path.join(_REPO_ROOT, "assets", "usd", "spider.usd")
+
 SPIDER_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path="/home/jayesh/Projects/Second_year_projects/Spyder_2/URDF/spider.usd",
+        usd_path=_USD_PATH,
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,

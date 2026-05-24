@@ -9,10 +9,10 @@ from . import agents
 
 gym.register(
     id="spider_3",
-    entry_point=f"{__name__}.spyder_2_env:Spdrbot3Env",
+    entry_point=f"{__name__}.spider_env:SpiderEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.spyder_2_env_cfg:Spdrbot3EnvCfg",
+        "env_cfg_entry_point": f"{__name__}.spider_env_cfg:SpiderEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
         "skrl_amp_cfg_entry_point": f"{agents.__name__}:skrl_amp_cfg.yaml",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",

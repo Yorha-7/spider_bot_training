@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 
-from .spyder_2_env_cfg import Spdrbot3EnvCfg
+from .spider_env_cfg import SpiderEnvCfg
 
 # spdrbot3_env.py
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
@@ -24,10 +24,10 @@ from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor
 
 
-class Spdrbot3Env(DirectRLEnv):
-    cfg: Spdrbot3EnvCfg
+class SpiderEnv(DirectRLEnv):
+    cfg: SpiderEnvCfg
 
-    def __init__(self, cfg: Spdrbot3EnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: SpiderEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         # Joint position command (deviation from default joint positions)
