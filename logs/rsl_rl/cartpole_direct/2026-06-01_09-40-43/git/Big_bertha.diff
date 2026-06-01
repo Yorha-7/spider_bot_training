@@ -1,0 +1,269 @@
+--- git commit ---
+c1246d1d1fd431ff0102918ba53c69bfe575ceda
+
+
+--- git status ---
+On branch Big_bertha
+Your branch is up to date with 'upstream/Big_bertha'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   README.md
+	modified:   source/Big_bertha/Big_bertha/assets/Big_bertha.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/README.md b/README.md
+index 26dc795..1907407 100644
+--- a/README.md
++++ b/README.md
+@@ -1,135 +1,123 @@
+-# Template for Isaac Lab Projects
++# Spider Bot Training
+ 
+-## Overview
++Quadruped spider robot locomotion using PPO on [NVIDIA Isaac Lab](https://isaac-sim.github.io/IsaacLab).
+ 
+-This project/repository serves as a template for building projects or extensions based on Isaac Lab.
+-It allows you to develop in an isolated environment, outside of the core Isaac Lab repository.
++A 12-DOF SG90-based spider robot trained with reinforcement learning for velocity-tracking locomotion and trot gait coordination.
+ 
+-**Key Features:**
++<img src="assets/gifs/spider.gif" width="480">
+ 
+-- `Isolation` Work outside the core Isaac Lab repository, ensuring that your development efforts remain self-contained.
+-- `Flexibility` This template is set up to allow your code to be run as an extension in Omniverse.
++## Features
+ 
+-**Keywords:** extension, template, isaaclab
++- **12-DOF spider robot** — 4 legs × 3 joints (hip, thigh, calf), modeled in URDF/USD
++- **200 parallel environments** for efficient training
++- **PPO via RSL-RL and skrl** with tuned hyperparameters
++- **AMP support** via skrl
++- **11 reward terms** — velocity tracking, trot gait, smoothness, joint regularization
++- **Trot gait** — diagonal foot pairs (FL+RR, FR+RL)
++- **Keyboard teleoperation** — WASD + QE velocity control
++- **Checkpoint export** — JIT and ONNX
+ 
+-## Installation
++## Repository Structure
+ 
+-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
+-  We recommend using the conda or uv installation as it simplifies calling Python scripts from the terminal.
+-
+-- Clone or copy this project/repository separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
+-
+-- Using a python interpreter that has Isaac Lab installed, install the library in editable mode using:
+-
+-    ```bash
+-    # use 'PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
+-    python -m pip install -e source/Big_bertha
+-
+-- Verify that the extension is correctly installed by:
+-
+-    - Listing the available tasks:
+-
+-        Note: It the task name changes, it may be necessary to update the search pattern `"Template-"`
+-        (in the `scripts/list_envs.py` file) so that it can be listed.
+-
+-        ```bash
+-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
+-        python scripts/list_envs.py
+-        ```
+-
+-    - Running a task:
+-
+-        ```bash
+-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
+-        python scripts/<RL_LIBRARY>/train.py --task=<TASK_NAME>
+-        ```
+-
+-    - Running a task with dummy agents:
+-
+-        These include dummy agents that output zero or random agents. They are useful to ensure that the environments are configured correctly.
+-
+-        - Zero-action agent
++```
++spider_bot_training/
++├── assets/
++│   ├── gifs/             # demo recordings
++│   ├── images/           # static media
++│   └── usd/              # URDF and USD robot description files
++├── scripts/
++│   ├── rsl_rl/           # train.py, play.py, play_teleop.py, cli_args.py
++│   ├── skrl/             # train.py, play.py
++│   ├── random_agent.py
++│   ├── zero_agent.py
++│   ├── list_envs.py
++│   ├── train.sh          # interactive train launcher
++│   └── play.sh           # interactive play launcher
++└── source/
++    └── spider_rl/        # IsaacLab extension
++        ├── config/extension.toml
++        ├── setup.py
++        └── spider_rl/
++            ├── assets/spider.py        # robot articulation config
++            ├── tasks/direct/spider/    # RL env + agent configs
++            │   ├── spider_env.py
++            │   ├── spider_env_cfg.py
++            │   └── agents/
++            └── utils/keyboard_input.py
++```
+ 
+-            ```bash
+-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
+-            python scripts/zero_agent.py --task=<TASK_NAME>
+-            ```
+-        - Random-action agent
++## Setup
+ 
+-            ```bash
+-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
+-            python scripts/random_agent.py --task=<TASK_NAME>
+-            ```
++```bash
++# Install the extension
++python -m pip install -e source/spider_rl
++```
+ 
+-### Set up IDE (Optional)
++## Training
+ 
+-To setup the IDE, please follow these instructions:
++```bash
++# RSL-RL
++python scripts/rsl_rl/train.py --task spider_3 --num_envs 200 --headless
+ 
+-- Run VSCode Tasks, by pressing `Ctrl+Shift+P`, selecting `Tasks: Run Task` and running the `setup_python_env` in the drop down menu.
+-  When running this task, you will be prompted to add the absolute path to your Isaac Sim installation.
++# skrl
++python scripts/skrl/train.py --task spider_3 --num_envs 200 --headless
+ 
+-If everything executes correctly, it should create a file .python.env in the `.vscode` directory.
+-The file contains the python paths to all the extensions provided by Isaac Sim and Omniverse.
+-This helps in indexing all the python modules for intelligent suggestions while writing code.
++# Or use the interactive launcher
++bash scripts/train.sh
++```
+ 
+-### Setup as Omniverse Extension (Optional)
++### Resume Training
+ 
+-We provide an example UI extension that will load upon enabling your extension defined in `source/Big_bertha/Big_bertha/ui_extension_example.py`.
++```bash
++python scripts/rsl_rl/train.py --task spider_3 --resume \
++    --load_run <run_dir> --checkpoint model_xxxx.pt
++```
+ 
+-To enable your extension, follow these steps:
++## Inference
+ 
+-1. **Add the search path of this project/repository** to the extension manager:
+-    - Navigate to the extension manager using `Window` -> `Extensions`.
+-    - Click on the **Hamburger Icon**, then go to `Settings`.
+-    - In the `Extension Search Paths`, enter the absolute path to the `source` directory of this project/repository.
+-    - If not already present, in the `Extension Search Paths`, enter the path that leads to Isaac Lab's extension directory directory (`IsaacLab/source`)
+-    - Click on the **Hamburger Icon**, then click `Refresh`.
++```bash
++python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path/to/model.pt>
+ 
+-2. **Search and enable your extension**:
+-    - Find your extension under the `Third Party` category.
+-    - Toggle it to enable your extension.
++# Fixed velocity (X Y YAW)
++python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path> --fixed_velocity 0.5 0.0 0.0
+ 
+-## Code formatting
++# Or use the interactive launcher
++bash scripts/play.sh
++```
+ 
+-We have a pre-commit template to automatically format your code.
+-To install pre-commit:
++## Teleoperation
+ 
+ ```bash
+-pip install pre-commit
++python scripts/rsl_rl/play_teleop.py --task spider_3
+ ```
+ 
+-Then you can run pre-commit with:
++| Key | Action |
++|-----|--------|
++| W/S | Forward/Backward |
++| A/D | Strafe Left/Right |
++| Q/E | Turn Left/Right |
++| SPACE | Stop |
++
++## Reward Terms
++
++| Term | Scale | Purpose |
++|------|-------|---------|
++| lin_vel | 5.0 | Track target velocity |
++| yaw_rate | 1.0 | Track target turning |
++| z_vel | -2.0 | Prevent bouncing |
++| ang_vel | -0.02 | Penalize tilt |
++| joint_torque | -1e-5 | Energy efficiency |
++| joint_accel | -1e-7 | Smooth acceleration |
++| action_rate | -0.01 | Smooth actions |
++| flat_orientation | -1.5 | Keep upright |
++| joint_activity | 0.1 | Encourage joint use |
++| feet_air_time | 0.01 | Foot lift |
++| alternating_gait | 0.2 | Trot coordination |
++
++## Development
+ 
+ ```bash
++pip install pre-commit
++pre-commit install
+ pre-commit run --all-files
+ ```
+-
+-## Troubleshooting
+-
+-### Pylance Missing Indexing of Extensions
+-
+-In some VsCode versions, the indexing of part of the extensions is missing.
+-In this case, add the path to your extension in `.vscode/settings.json` under the key `"python.analysis.extraPaths"`.
+-
+-```json
+-{
+-    "python.analysis.extraPaths": [
+-        "<path-to-ext-repo>/source/Big_bertha"
+-    ]
+-}
+-```
+-
+-### Pylance Crash
+-
+-If you encounter a crash in `pylance`, it is probable that too many files are indexed and you run out of memory.
+-A possible solution is to exclude some of omniverse packages that are not used in your project.
+-To do so, modify `.vscode/settings.json` and comment out packages under the key `"python.analysis.extraPaths"`
+-Some examples of packages that can likely be excluded are:
+-
+-```json
+-"<path-to-isaac-sim>/extscache/omni.anim.*"         // Animation packages
+-"<path-to-isaac-sim>/extscache/omni.kit.*"          // Kit UI tools
+-"<path-to-isaac-sim>/extscache/omni.graph.*"        // Graph UI tools
+-"<path-to-isaac-sim>/extscache/omni.services.*"     // Services tools
+-...
+-```
+\ No newline at end of file
+diff --git a/source/Big_bertha/Big_bertha/assets/Big_bertha.py b/source/Big_bertha/Big_bertha/assets/Big_bertha.py
+index 12bb858..c561c8f 100644
+--- a/source/Big_bertha/Big_bertha/assets/Big_bertha.py
++++ b/source/Big_bertha/Big_bertha/assets/Big_bertha.py
+@@ -81,8 +81,8 @@ BIG_BERTHA_CFG = ArticulationCfg(
+             ],
+             effort_limit=5.0,
+             velocity_limit=1,
+-            stiffness=40.0,
+-            damping=1.0,
++            stiffness=25.0,
++            damping=1,
+         ),
+     },
+ )
