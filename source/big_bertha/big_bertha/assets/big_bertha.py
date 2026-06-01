@@ -3,10 +3,12 @@
 The following configuration parameters are available:
 
 """
+
 import os
+
+import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
-import isaaclab.sim as sim_utils
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
 _USD_PATH = os.path.join(_REPO_ROOT, "assets", "usd", "big_bertha.usd")

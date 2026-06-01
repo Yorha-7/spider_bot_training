@@ -26,7 +26,7 @@
   </link>
 
   <!-- ==================== FRONT LEFT LEG ==================== -->
-  
+
   <!-- FL Hip Joint and Link -->
   <joint name="FL_hip_joint" type="revolute">
     <origin xyz="0.03125 0.04100 0.012" rpy="0 0 0"/>
@@ -124,7 +124,7 @@
   </link>
 
   <!-- ==================== FRONT RIGHT LEG ==================== -->
-  
+
   <!-- FR Hip Joint and Link -->
   <joint name="RL_hip_joint" type="revolute">
     <origin xyz="0.03125 -0.04100 0.012" rpy="0 0 0"/>
@@ -222,7 +222,7 @@
   </link>
 
   <!-- ==================== REAR LEFT LEG ==================== -->
-  
+
   <!-- RL Hip Joint and Link -->
   <joint name="FR_hip_joint" type="revolute">
     <origin xyz="-0.03125 0.04100 0.012" rpy="0 0 0"/>
@@ -320,7 +320,7 @@
   </link>
 
   <!-- ==================== REAR RIGHT LEG ==================== -->
-  
+
   <!-- RR Hip Joint and Link -->
   <joint name="RR_hip_joint" type="revolute">
     <origin xyz="-0.03125 -0.04100 0.012" rpy="0 0 0"/>

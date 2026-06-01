@@ -25,11 +25,11 @@ echo ""
 read -p "Enter choice [default: 1]: " RUN_MODE
 
 case "$RUN_MODE" in
-    2) 
+    2)
         HEADLESS_FLAG=""
         echo "Running with GUI"
         ;;
-    *) 
+    *)
         HEADLESS_FLAG="--headless"
         echo "Running headless"
         ;;

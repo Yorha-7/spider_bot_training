@@ -6,6 +6,7 @@
 """Script to play a trained policy with teleoperation controls."""
 
 import argparse
+
 import torch
 
 from isaaclab.app import AppLauncher
@@ -28,8 +29,6 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import gymnasium as gym
-from isaaclab.envs import DirectRLEnv
-
 import spider_rl.tasks  # noqa: F401
 
 
@@ -40,6 +39,7 @@ def main():
             env_cfg_entry_point = task_spec.kwargs["env_cfg_entry_point"]
             module_path, class_name = env_cfg_entry_point.rsplit(".", 1)
             import importlib
+
             module = importlib.import_module(module_path)
             env_cfg = getattr(module, class_name)()
             break
@@ -63,7 +63,10 @@ def main():
 
     if args_cli.fixed_velocity:
         env.unwrapped.set_fixed_velocity(list(args_cli.fixed_velocity))
-        print(f"[INFO] Fixed velocity: lin_x={args_cli.fixed_velocity[0]}, lin_y={args_cli.fixed_velocity[1]}, ang_z={args_cli.fixed_velocity[2]}")
+        print(
+            f"[INFO] Fixed velocity: lin_x={args_cli.fixed_velocity[0]},"
+            f" lin_y={args_cli.fixed_velocity[1]}, ang_z={args_cli.fixed_velocity[2]}"
+        )
     else:
         from spider_rl.utils import KeyboardInput
 

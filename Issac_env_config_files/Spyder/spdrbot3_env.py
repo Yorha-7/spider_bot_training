@@ -54,7 +54,7 @@ class Spdrbot3Env(DirectRLEnv):
                 "dof_torques_l2",
                 "dof_acc_l2",
                 "action_rate_l2",
-"flat_orientation_l2",
+                "flat_orientation_l2",
                 "base_height_l2",
                 "not_moving_penalty",
                 "falling_penalty",

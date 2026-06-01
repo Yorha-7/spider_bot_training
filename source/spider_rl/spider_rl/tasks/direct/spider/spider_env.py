@@ -5,16 +5,11 @@
 
 from __future__ import annotations
 
-
-from .spider_env_cfg import SpiderEnvCfg
-
 # spdrbot3_env.py
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-
-
 import gymnasium as gym
 import torch
 
@@ -23,8 +18,12 @@ from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor
 
+from .spider_env_cfg import SpiderEnvCfg
+
 
 class SpiderEnv(DirectRLEnv):
+    """Direct RL environment for 12-DOF spider locomotion with velocity-tracking rewards."""
+
     cfg: SpiderEnvCfg
 
     def __init__(self, cfg: SpiderEnvCfg, render_mode: str | None = None, **kwargs):
@@ -42,11 +41,12 @@ class SpiderEnv(DirectRLEnv):
         # Get specific body indices
         self._base_id, _ = self._contact_sensor.find_bodies("base_link")
         self._feet_ids, _ = self._contact_sensor.find_bodies(".*_calf_link")
-        self._die_body_ids, _ = self._contact_sensor.find_bodies(["RR_hip_link", "RL_hip_link", "FL_hip_link", "FR_hip_link"])
+        self._die_body_ids, _ = self._contact_sensor.find_bodies(
+            ["RR_hip_link", "RL_hip_link", "FL_hip_link", "FR_hip_link"]
+        )
         # Foot pairs for alternating gait (trot gait)
         # FL=0, FR=1, RL=2, RR=3 (order from find_bodies(".*_calf_link"))
         self._foot_pairs = [[0, 3], [1, 2]]  # [FL+RR, FR+RL]
-
 
         # Logging
         self._episode_sums = {
@@ -96,12 +96,12 @@ class SpiderEnv(DirectRLEnv):
             [
                 tensor
                 for tensor in (
-#                   self._robot.data.root_lin_vel_b,
-#                   self._robot.data.root_ang_vel_b,
+                    #                   self._robot.data.root_lin_vel_b,
+                    #                   self._robot.data.root_ang_vel_b,
                     self._robot.data.projected_gravity_b,
                     self._commands,
                     self._robot.data.joint_pos - self._robot.data.default_joint_pos,
-#                    self._robot.data.joint_vel,
+                    #                    self._robot.data.joint_vel,
                     self._actions,
                 )
                 if tensor is not None

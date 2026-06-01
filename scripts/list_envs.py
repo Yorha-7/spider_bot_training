@@ -32,10 +32,9 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
+import big_bertha.tasks  # noqa: F401
 import gymnasium as gym
 from prettytable import PrettyTable
-
-import big_bertha.tasks  # noqa: F401
 
 
 def main():

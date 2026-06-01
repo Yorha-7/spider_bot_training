@@ -1,0 +1,14 @@
+spider-rl:
+  - changed-files:
+    - any-glob-to-any-file:
+      - source/spider_rl/**
+
+big-bertha:
+  - changed-files:
+    - any-glob-to-any-file:
+      - source/big_bertha/**
+
+ci:
+  - changed-files:
+    - any-glob-to-any-file:
+      - .github/**

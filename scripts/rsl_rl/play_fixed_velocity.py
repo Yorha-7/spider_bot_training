@@ -48,6 +48,7 @@ import importlib.metadata as metadata
 import os
 import time
 
+import big_bertha.tasks  # noqa: F401
 import gymnasium as gym
 import torch
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
@@ -71,8 +72,6 @@ from isaaclab_rl.utils.pretrained_checkpoint import get_published_pretrained_che
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
-
-import big_bertha.tasks  # noqa: F401
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -137,8 +136,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         dtype=torch.float,
     ).unsqueeze(0)
 
-    print(f"[INFO] Fixed command: X={args_cli.cmd_x:.2f} m/s, Y={args_cli.cmd_y:.2f} m/s, "
-          f"Yaw={args_cli.cmd_yaw:.2f} rad/s")
+    print(
+        f"[INFO] Fixed command: X={args_cli.cmd_x:.2f} m/s, Y={args_cli.cmd_y:.2f} m/s, "
+        f"Yaw={args_cli.cmd_yaw:.2f} rad/s"
+    )
     print(f"[INFO] Simulation dt: {dt:.4f}s")
 
     obs = env.get_observations()
