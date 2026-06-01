@@ -4,7 +4,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 
-
 # spdrbot3_env_cfg.py
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
@@ -12,6 +11,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 
+from big_bertha.assets.big_bertha import BIG_BERTHA_CFG
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
@@ -20,12 +20,10 @@ from isaaclab.envs import DirectRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import ContactSensorCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
-from isaaclab.sensors import ContactSensorCfg
-
-from big_bertha.assets.big_bertha import BIG_BERTHA_CFG
 
 
 @configclass
@@ -107,16 +105,16 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     robot: ArticulationCfg = BIG_BERTHA_CFG.replace(prim_path="/World/envs/env_.*/Robot")
 
     # reward scales - SIMPLIFIED FOR STABILITY
-    lin_vel_reward_scale = 5.0   # Velocity tracking reward
-    yaw_rate_reward_scale = 1.0 # Yaw tracking reward
-    z_vel_reward_scale = -2.0    # Reduced vertical velocity penalty
-    ang_vel_reward_scale = -0.02 # Reduced roll/pitch penalty
+    lin_vel_reward_scale = 5.0  # Velocity tracking reward
+    yaw_rate_reward_scale = 1.0  # Yaw tracking reward
+    z_vel_reward_scale = -2.0  # Reduced vertical velocity penalty
+    ang_vel_reward_scale = -0.02  # Reduced roll/pitch penalty
     joint_torque_reward_scale = -1e-5  # Minimal torque penalty
-    joint_accel_reward_scale = -1e-7   # Minimal acceleration penalty
-    action_rate_reward_scale = -0.01   # Action smoothness
+    joint_accel_reward_scale = -1e-7  # Minimal acceleration penalty
+    action_rate_reward_scale = -0.01  # Action smoothness
     flat_orientation_reward_scale = -1.5  # Reduced tilt penalty
     joint_activity_reward_scale = 0.1  # Reward for using all joints
-    gait_pattern_reward_scale = 0.3    # Deprecated: replaced by feet_air_time and alternating_gait
+    gait_pattern_reward_scale = 0.3  # Deprecated: replaced by feet_air_time and alternating_gait
     feet_air_time_reward_scale = 0.01  # Reward for individual foot lift
     alternating_gait_reward_scale = 0.2  # Reward for trot pattern (diagonal pairs)
-    max_tilt_angle_deg = 40.0            # Reset threshold
+    max_tilt_angle_deg = 40.0  # Reset threshold

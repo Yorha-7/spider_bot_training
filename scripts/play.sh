@@ -54,7 +54,7 @@ echo ""
 # Ask for fixed velocity
 echo "Velocity commands: X Y YAW (values between -1 and 1)"
 echo "X: forward/backward velocity"
-echo "Y: left/right velocity"  
+echo "Y: left/right velocity"
 echo "YAW: angular velocity (turning)"
 echo ""
 

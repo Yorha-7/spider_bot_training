@@ -5,16 +5,11 @@
 
 from __future__ import annotations
 
-
-from .big_bertha_env_cfg import BigberthaEnvCfg
-
 # spdrbot3_env.py
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-
-
 import gymnasium as gym
 import torch
 
@@ -22,6 +17,8 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor
+
+from .big_bertha_env_cfg import BigberthaEnvCfg
 
 
 class BigberthaEnv(DirectRLEnv):
@@ -46,7 +43,6 @@ class BigberthaEnv(DirectRLEnv):
         # Foot pairs for alternating gait (trot gait)
         # FL=0, FR=1, RL=2, RR=3 (order from find_bodies(".*_calf_link"))
         self._foot_pairs = [[0, 3], [1, 2]]  # [FL+RR, FR+RL]
-
 
         # Logging
         self._episode_sums = {
@@ -96,12 +92,12 @@ class BigberthaEnv(DirectRLEnv):
             [
                 tensor
                 for tensor in (
-#                   self._robot.data.root_lin_vel_b,
-#                   self._robot.data.root_ang_vel_b,
+                    #                   self._robot.data.root_lin_vel_b,
+                    #                   self._robot.data.root_ang_vel_b,
                     self._robot.data.projected_gravity_b,
                     self._commands,
                     self._robot.data.joint_pos - self._robot.data.default_joint_pos,
-#                    self._robot.data.joint_vel,
+                    #                    self._robot.data.joint_vel,
                     self._actions,
                 )
                 if tensor is not None
