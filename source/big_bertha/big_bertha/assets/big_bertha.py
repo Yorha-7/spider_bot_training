@@ -81,10 +81,10 @@ BIG_BERTHA_CFG = ArticulationCfg(
                 "Revolute_120",
                 "Revolute_121",
             ],
-            effort_limit_sim=1.0,
+            effort_limit_sim=0.8,
             velocity_limit_sim=6.5,
             stiffness=25.0,
-            damping=1,
+            damping=2,
         ),
     },
 )
