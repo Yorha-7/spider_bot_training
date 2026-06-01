@@ -1,0 +1,52 @@
+name: Smoke Test
+
+on:
+  pull_request:
+    branches: [main, spider_imprv, big_bertha]
+  push:
+    branches: [main, spider_imprv, big_bertha]
+
+jobs:
+  syntax:
+    name: Syntax and package structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: pip install toml setuptools --quiet
+
+      - name: Compile all Python source files
+        run: |
+          find source/ scripts/ -name "*.py" | xargs python -m py_compile
+          echo "All .py files compile without syntax errors"
+
+      - name: Validate package install (no Isaac Lab deps)
+        run: |
+          pip install --no-deps -e source/spider_rl -e source/big_bertha
+          echo "spider_rl and big_bertha packages install cleanly"
+
+      - name: Check package entry points are importable
+        run: |
+          python - <<'EOF'
+          import importlib, sys
+
+          # These modules only reach isaaclab at runtime (gym.register / env creation).
+          # Verifying they are findable by Python catches missing __init__.py files
+          # and broken relative-import chains at the package-structure level.
+          packages = ["spider_rl", "big_bertha"]
+          for pkg in packages:
+              try:
+                  spec = importlib.util.find_spec(pkg)
+                  if spec is None:
+                      print(f"FAIL: {pkg} not found on sys.path")
+                      sys.exit(1)
+                  print(f"OK: {pkg} found at {spec.origin}")
+              except Exception as e:
+                  print(f"FAIL: {pkg} — {e}")
+                  sys.exit(1)
+          EOF
