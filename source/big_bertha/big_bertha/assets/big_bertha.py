@@ -24,7 +24,7 @@ BIG_BERTHA_CFG = ArticulationCfg(
             disable_gravity=False,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False,
+            enabled_self_collisions=True,
             solver_position_iteration_count=8,
             solver_velocity_iteration_count=1,
             sleep_threshold=0.005,
