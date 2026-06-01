@@ -26,14 +26,11 @@ jobs:
           script: |
             const title = context.payload.pull_request.title;
             const typeMap = {
-              feat:     { label: 'enhancement',   color: '0075ca' },
-              fix:      { label: 'bug',            color: 'd73a4a' },
-              docs:     { label: 'documentation',  color: '0052cc' },
-              chore:    { label: 'maintenance',    color: 'e4e669' },
-              ci:       { label: 'ci',             color: '1d76db' },
-              refactor: { label: 'refactor',       color: 'cfd3d7' },
-              test:     { label: 'test',           color: '0e8a16' },
-              merge:    { label: 'merge',          color: 'ededed' },
+              feat:  { label: 'enhancement',  color: '0075ca' },
+              fix:   { label: 'bug',          color: 'd73a4a' },
+              docs:  { label: 'documentation', color: '0052cc' },
+              chore: { label: 'maintenance',  color: 'e4e669' },
+              ci:    { label: 'ci',           color: '1d76db' },
             };
 
             const match = title.match(/^(\w+):/);
