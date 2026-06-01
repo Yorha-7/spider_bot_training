@@ -1,0 +1,30 @@
+spider-rl:
+  - changed-files:
+    - any-glob-to-any-file:
+      - source/spider_rl/**
+
+big-bertha:
+  - changed-files:
+    - any-glob-to-any-file:
+      - source/big_bertha/**
+
+ci:
+  - changed-files:
+    - any-glob-to-any-file:
+      - .github/**
+
+assets:
+  - changed-files:
+    - any-glob-to-any-file:
+      - assets/**
+
+scripts:
+  - changed-files:
+    - any-glob-to-any-file:
+      - scripts/**
+
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "*.md"
+      - docs/**
