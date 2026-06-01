@@ -3,9 +3,12 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+import logging
 import sys
 import threading
 import time
+
+log = logging.getLogger(__name__)
 
 if sys.platform == "linux":
     import select
@@ -64,9 +67,11 @@ class KeyboardInput:
         return self._running
 
     def print_controls(self):
-        print("\n--- Keyboard Controls ---")
-        print("W/S: Forward/Backward")
-        print("A/D: Strafe Left/Right")
-        print("Q/E: Turn Left/Right")
-        print("SPACE: Stop")
-        print("-------------------------\n")
+        log.info(
+            "\n--- Keyboard Controls ---\n"
+            "W/S: Forward/Backward\n"
+            "A/D: Strafe Left/Right\n"
+            "Q/E: Turn Left/Right\n"
+            "SPACE: Stop\n"
+            "-------------------------"
+        )
