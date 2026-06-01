@@ -2,7 +2,7 @@
 
 Quadruped spider robot locomotion using PPO on [NVIDIA Isaac Lab](https://isaac-sim.github.io/IsaacLab).
 
-A 12-DOF SG90-based spider robot trained with reinforcement learning for velocity-tracking locomotion and trot gait coordination.
+A 12-DOF MG995-based spider robot trained with reinforcement learning for velocity-tracking locomotion and trot gait coordination.
 
 <img src="assets/GIF/Big_bertha.gif" width="480">
 
@@ -17,50 +17,62 @@ A 12-DOF SG90-based spider robot trained with reinforcement learning for velocit
 - **Keyboard teleoperation** — WASD + QE velocity control
 - **Checkpoint export** — JIT and ONNX
 
+## Motor Configuration
+
+The robot uses MG995 servos configured as implicit actuators in Isaac Lab:
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| effort_limit | 1.0 | Maximum torque (N·m) |
+| velocity_limit | 6.5 | Maximum velocity (rad/s) |
+| stiffness | 25.0 | Proportional gain for position control |
+| damping | 1 | Derivative gain for velocity damping |
+
 ## Repository Structure
 
 ```
-spider_bot_training/
+Big_bertha/
 ├── assets/
-│   ├── gifs/             # demo recordings
-│   ├── images/           # static media
-│   └── usd/              # URDF and USD robot description files
+│   ├── GIF/              # demo recordings
+│   ├── URDF/             # URDF description, meshes, USD configs
+│   └── usd/              # USD robot description files
 ├── scripts/
-│   ├── rsl_rl/           # train.py, play.py, play_teleop.py, cli_args.py
+│   ├── rsl_rl/           # train.py, play.py, play_fixed_velocity.py, cli_args.py
 │   ├── skrl/             # train.py, play.py
 │   ├── random_agent.py
 │   ├── zero_agent.py
-│   ├── list_envs.py
-│   ├── train.sh          # interactive train launcher
-│   └── play.sh           # interactive play launcher
+│   └── list_envs.py
 └── source/
-    └── spider_rl/        # IsaacLab extension
+    └── Big_bertha/       # IsaacLab extension
         ├── config/extension.toml
         ├── setup.py
-        └── spider_rl/
-            ├── assets/spider.py        # robot articulation config
-            ├── tasks/direct/spider/    # RL env + agent configs
-            │   ├── spider_env.py
-            │   ├── spider_env_cfg.py
+        └── Big_bertha/
+            ├── assets/Big_bertha.py        # robot articulation config
+            ├── tasks/direct/big_bertha/    # RL env + agent configs
+            │   ├── big_bertha_env.py
+            │   ├── big_bertha_env_cfg.py
             │   └── agents/
-            └── utils/keyboard_input.py
+            │       ├── rsl_rl_ppo_cfg.py
+            │       ├── skrl_ppo_cfg.yaml
+            │       └── skrl_amp_cfg.yaml
+            └── ui_extension_example.py
 ```
 
 ## Setup
 
 ```bash
 # Install the extension
-python -m pip install -e source/spider_rl
+python -m pip install -e source/Big_bertha
 ```
 
 ## Training
 
 ```bash
 # RSL-RL
-python scripts/rsl_rl/train.py --task spider_3 --num_envs 200 --headless
+python scripts/rsl_rl/train.py --task Big_Bertha --num_envs 200 --headless
 
 # skrl
-python scripts/skrl/train.py --task spider_3 --num_envs 200 --headless
+python scripts/skrl/train.py --task Big_Bertha --num_envs 200 --headless
 
 # Or use the interactive launcher
 bash scripts/train.sh
@@ -69,17 +81,17 @@ bash scripts/train.sh
 ### Resume Training
 
 ```bash
-python scripts/rsl_rl/train.py --task spider_3 --resume \
+python scripts/rsl_rl/train.py --task Big_Bertha --resume \
     --load_run <run_dir> --checkpoint model_xxxx.pt
 ```
 
 ## Inference
 
 ```bash
-python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path/to/model.pt>
+python scripts/rsl_rl/play.py --task Big_Bertha --checkpoint <path/to/model.pt>
 
 # Fixed velocity (X Y YAW)
-python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path> --fixed_velocity 0.5 0.0 0.0
+python scripts/rsl_rl/play.py --task Big_Bertha --checkpoint <path> --fixed_velocity 0.5 0.0 0.0
 
 # Or use the interactive launcher
 bash scripts/play.sh
@@ -88,7 +100,7 @@ bash scripts/play.sh
 ## Teleoperation
 
 ```bash
-python scripts/rsl_rl/play_teleop.py --task spider_3
+python scripts/rsl_rl/play_teleop.py --task Big_Bertha
 ```
 
 | Key | Action |
