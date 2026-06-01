@@ -1,0 +1,52 @@
+name: Compliance
+
+on:
+  pull_request:
+    branches: [main, spider_imprv, big_bertha]
+  push:
+    branches: [main, spider_imprv, big_bertha]
+
+jobs:
+  commit-lint:
+    name: Commit message lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: .commitlintrc.yml
+
+  file-checks:
+    name: Required files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check LICENSE exists
+        run: test -f LICENSE
+
+      - name: Check CONTRIBUTING.md exists
+        run: test -f CONTRIBUTING.md
+
+      - name: Check no debug prints in Python files
+        run: |
+          if grep -rn "print(" source/ --include="*.py" | grep -v "# noqa" | grep -v "\.py:#"; then
+            echo "Found raw print() calls in source/ — use logging instead"
+            exit 1
+          fi || true
+
+  pre-commit:
+    name: Pre-commit hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: pre-commit/action@v3.0.1
