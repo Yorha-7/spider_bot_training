@@ -112,7 +112,7 @@ class BigberthaEnv(DirectRLEnv):
     def _get_rewards(self) -> torch.Tensor:
         # linear velocity tracking
         lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b[:, :2]), dim=1)
-        lin_vel_error_mapped = torch.exp(-lin_vel_error / 0.25)
+        lin_vel_error_mapped = torch.exp(-lin_vel_error / 0.5)
         # yaw rate tracking
         yaw_rate_error = torch.square(self._commands[:, 2] - self._robot.data.root_ang_vel_b[:, 2])
         yaw_rate_error_mapped = torch.exp(-yaw_rate_error / 0.25)
@@ -182,8 +182,10 @@ class BigberthaEnv(DirectRLEnv):
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
-        # Sample new commands
-        self._commands[env_ids] = torch.zeros_like(self._commands[env_ids]).uniform_(-1.0, 1.0)
+        # Sample new commands — clamped to physically achievable ranges for Big Bertha
+        self._commands[env_ids, 0].uniform_(-0.5, 0.5)  # forward/back (m/s)
+        self._commands[env_ids, 1].uniform_(-0.3, 0.3)  # lateral (m/s)
+        self._commands[env_ids, 2].uniform_(-0.8, 0.8)  # yaw (rad/s)
         # Reset robot state
         joint_pos = self._robot.data.default_joint_pos[env_ids]
         joint_vel = self._robot.data.default_joint_vel[env_ids]
