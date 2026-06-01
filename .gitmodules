@@ -1,0 +1,3 @@
+[submodule "URDF/Spyder/SpdrBot"]
+	path = URDF/Spyder/SpdrBot
+	url = https://github.com/Indystrycc/SpdrBot
