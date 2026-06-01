@@ -98,7 +98,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     )
 
     # scene
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=64, env_spacing=2.0, replicate_physics=False)
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=32, env_spacing=2.0, replicate_physics=True)
 
     # events
     events: EventCfg = EventCfg()
