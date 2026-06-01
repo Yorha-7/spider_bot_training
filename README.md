@@ -1,10 +1,12 @@
 # Spider Bot Training
 
-Quadruped spider robot locomotion using PPO on [NVIDIA Isaac Lab](https://isaac-sim.github.io/IsaacLab).
+Multi-robot locomotion training using PPO on [NVIDIA Isaac Lab](https://isaac-sim.github.io/IsaacLab).
 
-A 12-DOF SG90-based spider robot trained with reinforcement learning for velocity-tracking locomotion and trot gait coordination.
+12-DOF spider robots trained with reinforcement learning for velocity-tracking locomotion and trot gait coordination.
 
-<img src="assets/gifs/spider.gif" width="480">
+| Spider (SG90) | Big Bertha (MG995) |
+|:---:|:---:|
+| <img src="assets/gifs/spider.gif" width="360"> | <img src="assets/gifs/big_bertha.gif" width="360"> |
 
 ## Features
 
@@ -24,7 +26,8 @@ spider_bot_training/
 ├── assets/
 │   ├── gifs/             # demo recordings
 │   ├── images/           # static media
-│   └── usd/              # URDF and USD robot description files
+│   ├── URDF/             # robot URDF + meshes
+│   └── usd/              # USD robot description files
 ├── scripts/
 │   ├── rsl_rl/           # train.py, play.py, play_teleop.py, cli_args.py
 │   ├── skrl/             # train.py, play.py
@@ -34,16 +37,19 @@ spider_bot_training/
 │   ├── train.sh          # interactive train launcher
 │   └── play.sh           # interactive play launcher
 └── source/
-    └── spider_rl/        # IsaacLab extension
+    ├── spider_rl/        # SG90 spider IsaacLab extension
+    │   ├── config/extension.toml
+    │   ├── setup.py
+    │   └── spider_rl/
+    │       ├── assets/spider.py        # robot articulation config
+    │       ├── tasks/direct/spider/    # RL env + agent configs
+    │       └── utils/keyboard_input.py
+    └── big_bertha/       # MG995 big_bertha IsaacLab extension
         ├── config/extension.toml
         ├── setup.py
-        └── spider_rl/
-            ├── assets/spider.py        # robot articulation config
-            ├── tasks/direct/spider/    # RL env + agent configs
-            │   ├── spider_env.py
-            │   ├── spider_env_cfg.py
-            │   └── agents/
-            └── utils/keyboard_input.py
+        └── big_bertha/
+            ├── assets/big_bertha.py    # robot articulation config
+            └── tasks/direct/big_bertha/ # RL env + agent configs
 ```
 
 ## Setup

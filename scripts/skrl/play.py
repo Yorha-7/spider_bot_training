@@ -115,7 +115,7 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
-import spider_rl.tasks  # noqa: F401
+import big_bertha.tasks  # noqa: F401
 
 # config shortcuts
 if args_cli.agent is None:

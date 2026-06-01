@@ -9,7 +9,7 @@ Script to print all the available environments in Isaac Lab.
 The script iterates over all registered environments and stores the details in a table.
 It prints the name of the environment, the entry point and the config file.
 
-All the environments are registered in the `spider_rl` extension. They start
+All the environments are registered in the `big_bertha` extension. They start
 with `Isaac` in their name.
 """
 
@@ -35,11 +35,11 @@ simulation_app = app_launcher.app
 import gymnasium as gym
 from prettytable import PrettyTable
 
-import spider_rl.tasks  # noqa: F401
+import big_bertha.tasks  # noqa: F401
 
 
 def main():
-    """Print all environments registered in `spider_rl` extension."""
+    """Print all environments registered in `big_bertha` extension."""
     # print all the available environments
     table = PrettyTable(["S. No.", "Task Name", "Entry Point", "Config"])
     table.title = "Available Environments in Isaac Lab"
