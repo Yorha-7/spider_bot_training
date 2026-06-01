@@ -13,7 +13,7 @@ from . import agents
 
 
 gym.register(
-    id="Big_Bertha",
+    id="big_bertha",
     entry_point=f"{__name__}.big_bertha_env:BigberthaEnv",
     disable_env_checker=True,
     kwargs={
