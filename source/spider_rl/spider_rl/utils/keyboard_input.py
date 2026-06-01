@@ -15,6 +15,8 @@ if sys.platform == "linux":
 
 
 class KeyboardInput:
+    """Non-blocking keyboard input handler for teleoperation velocity commands."""
+
     def __init__(self):
         self.vel_x = 0.0
         self.vel_y = 0.0
@@ -52,6 +54,7 @@ class KeyboardInput:
             time.sleep(0.01)
 
     def start(self):
+        """Start the background keyboard listener thread."""
         if self._thread is None or not self._thread.is_alive():
             self._running = True
             if sys.platform == "linux":
@@ -59,14 +62,17 @@ class KeyboardInput:
                 self._thread.start()
 
     def stop(self):
+        """Stop the keyboard listener thread and wait for it to join."""
         self._running = False
         if self._thread:
             self._thread.join(timeout=1.0)
 
     def is_active(self):
+        """Return True if the keyboard listener thread is running."""
         return self._running
 
     def print_controls(self):
+        """Log the keyboard control scheme."""
         log.info(
             "\n--- Keyboard Controls ---\n"
             "W/S: Forward/Backward\n"

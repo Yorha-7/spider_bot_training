@@ -22,6 +22,8 @@ from .spider_env_cfg import SpiderEnvCfg
 
 
 class SpiderEnv(DirectRLEnv):
+    """Direct RL environment for 12-DOF spider locomotion with velocity-tracking rewards."""
+
     cfg: SpiderEnvCfg
 
     def __init__(self, cfg: SpiderEnvCfg, render_mode: str | None = None, **kwargs):

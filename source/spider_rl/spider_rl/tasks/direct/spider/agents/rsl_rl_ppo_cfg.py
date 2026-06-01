@@ -10,6 +10,8 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 @configclass
 class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
+    """PPO runner configuration for the spider velocity-control task."""
+
     num_steps_per_env = 24
     max_iterations = 5000
     save_interval = 100

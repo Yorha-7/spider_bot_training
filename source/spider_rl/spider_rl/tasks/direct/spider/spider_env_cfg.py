@@ -54,6 +54,8 @@ class EventCfg:
 
 @configclass
 class SpiderEnvCfg(DirectRLEnvCfg):
+    """Configuration for the 12-DOF spider direct velocity-tracking task."""
+
     # env
     episode_length_s = 20.0
     decimation = 4

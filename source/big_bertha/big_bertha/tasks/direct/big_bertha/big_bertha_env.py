@@ -22,6 +22,8 @@ from .big_bertha_env_cfg import BigberthaEnvCfg
 
 
 class BigberthaEnv(DirectRLEnv):
+    """Direct RL environment for Big Bertha locomotion with velocity-tracking rewards."""
+
     cfg: BigberthaEnvCfg
 
     def __init__(self, cfg: BigberthaEnvCfg, render_mode: str | None = None, **kwargs):

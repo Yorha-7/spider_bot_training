@@ -1,0 +1,44 @@
+name: Quality Gate (Level 2)
+
+on:
+  pull_request:
+    branches: [main, spider_imprv, big_bertha]
+  push:
+    branches: [main, spider_imprv, big_bertha]
+
+jobs:
+  config-validate:
+    name: Config structure (AST)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run config validator
+        run: python scripts/validate_configs.py
+
+  docstring-coverage:
+    name: Docstring coverage (≥ 80%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install interrogate
+        run: pip install interrogate --quiet
+
+      - name: Check docstring coverage
+        run: |
+          interrogate source/ \
+            --fail-under 80 \
+            --ignore-init-method \
+            --ignore-magic \
+            --ignore-private \
+            --ignore-module \
+            --verbose
