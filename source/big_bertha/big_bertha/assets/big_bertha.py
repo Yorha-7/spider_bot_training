@@ -9,7 +9,7 @@ from isaaclab.assets import ArticulationCfg
 import isaaclab.sim as sim_utils
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
-_USD_PATH = os.path.join(_REPO_ROOT, "assets", "usd", "Big_bertha.usd")
+_USD_PATH = os.path.join(_REPO_ROOT, "assets", "usd", "big_bertha.usd")
 
 BIG_BERTHA_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(

@@ -25,7 +25,7 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg
 
-from Big_bertha.assets.Big_bertha import BIG_BERTHA_CFG
+from big_bertha.assets.big_bertha import BIG_BERTHA_CFG
 
 
 @configclass
