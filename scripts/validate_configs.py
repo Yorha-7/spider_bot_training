@@ -40,8 +40,7 @@ def validate_env_cfg(path: Path) -> None:
         if not isinstance(node, ast.ClassDef):
             continue
         base_names = {
-            b.id if isinstance(b, ast.Name) else (b.attr if isinstance(b, ast.Attribute) else "")
-            for b in node.bases
+            b.id if isinstance(b, ast.Name) else (b.attr if isinstance(b, ast.Attribute) else "") for b in node.bases
         }
         if "DirectRLEnvCfg" not in base_names:
             continue

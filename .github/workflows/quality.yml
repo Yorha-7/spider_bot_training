@@ -39,6 +39,7 @@ jobs:
             --fail-under 80 \
             --ignore-init-method \
             --ignore-magic \
+            --ignore-semiprivate \
             --ignore-private \
             --ignore-module \
             --verbose

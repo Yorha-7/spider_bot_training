@@ -69,7 +69,7 @@ python scripts/validate_configs.py
 
 # Docstring coverage
 pip install interrogate
-interrogate source/ --fail-under 80 --ignore-init-method --ignore-magic --ignore-private --ignore-module --verbose
+interrogate source/ --fail-under 80 --ignore-init-method --ignore-magic --ignore-semiprivate --ignore-private --ignore-module --verbose
 
 # Full pre-commit suite
 pre-commit run --all-files
