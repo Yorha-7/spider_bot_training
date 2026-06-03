@@ -2,16 +2,13 @@
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-
-
-
 # spdrbot3_env_cfg.py
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-
+from big_bertha.assets.big_bertha import BIG_BERTHA_CFG
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
@@ -24,9 +21,6 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg
-
-from big_bertha.assets.big_bertha import BIG_BERTHA_CFG
-
 
 @configclass
 class EventCfg:
