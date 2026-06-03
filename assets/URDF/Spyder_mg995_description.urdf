@@ -50,7 +50,7 @@
       <mesh filename="./meshes/ydlidar.stl" scale="0.0001 0.0001 0.0001"/>
     </geometry>
   </collision>
-  
+
 </link>
 
   <link name="arm_a_4_1">
@@ -396,5 +396,5 @@
   <axis xyz="0 0 0"/>
 </joint>
 
-  
+
 </robot>
