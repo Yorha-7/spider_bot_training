@@ -22,7 +22,7 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg
 
-@configclass
+@dataclass
 class EventCfg:
     """Configuration for randomization."""
 
