@@ -8,6 +8,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from dataclasses import dataclass
+
 from big_bertha.assets.big_bertha import BIG_BERTHA_CFG
 
 import isaaclab.envs.mdp as mdp
@@ -17,10 +19,11 @@ from isaaclab.envs import DirectRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import ContactSensorCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
-from isaaclab.sensors import ContactSensorCfg
+
 
 @dataclass
 class EventCfg:
