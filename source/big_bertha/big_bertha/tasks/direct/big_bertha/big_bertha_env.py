@@ -92,12 +92,12 @@ class BigberthaEnv(DirectRLEnv):
             [
                 tensor
                 for tensor in (
-                    #                    self._robot.data.root_lin_vel_b,
-                    #                    self._robot.data.root_ang_vel_b,
+#                    self._robot.data.root_lin_vel_b,
+#                    self._robot.data.root_ang_vel_b,
                     self._robot.data.projected_gravity_b,
                     self._commands,
                     self._robot.data.joint_pos - self._robot.data.default_joint_pos,
-                    #                    self._robot.data.joint_vel,
+#                    self._robot.data.joint_vel,
                     self._actions,
                 )
                 if tensor is not None
