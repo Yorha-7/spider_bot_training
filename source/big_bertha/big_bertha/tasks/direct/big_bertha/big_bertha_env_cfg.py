@@ -64,7 +64,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # simulation
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 200,
-        render_interval=1,
+        render_interval=4,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
@@ -88,10 +88,10 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     )
 
     contact_sensor: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/.*",  # Path to base_link in cloned envs
-        history_length=5,
+        prim_path="/World/envs/env_.*/Robot/(base_link|arm_a_.*|arm_c_.*)",
+        history_length=3,
         update_period=0.005,  # Matches sim dt = 1/200
-        track_air_time=True,  # Not needed for base
+        track_air_time=True,
     )
 
     # scene
