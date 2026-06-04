@@ -68,14 +68,20 @@ Convert URDF robot descriptions to USD using Isaac Sim's URDF Importer:
 
 ```bash
 # Spider (SG90)
-python -m omni.importer.urdf \
-    --urdf_path assets/URDF/spider_rl/spider_description.urdf \
-    --output_path assets/usd/spider.usd
+ISAACLAB=$(find ~ -type d -name "IsaacLab" 2>/dev/null | head -n 1)
+SPIDER=$(find ~ -type d -name "spider_bot_training" 2>/dev/null | head -n 1)
+python3 "$ISAACLAB/scripts/tools/convert_urdf.py" \
+  --merge-joints \
+  "$SPIDER/assets/URDF/spider_rl/spider_description.urdf" \
+  "$SPIDER/assets/usd/spider.usd"
 
 # Big Bertha (MG995)
-python -m omni.importer.urdf \
-    --urdf_path assets/URDF/big_bertha/Spyder_mg995_description.urdf \
-    --output_path assets/usd/big_bertha.usd
+ISAACLAB=$(find ~ -type d -name "IsaacLab" 2>/dev/null | head -n 1)
+SPIDER=$(find ~ -type d -name "spider_bot_training" 2>/dev/null | head -n 1)
+python3 "$ISAACLAB/scripts/tools/convert_urdf.py" \
+  --merge-joints \
+  "$SPIDER/assets/URDF/big_bertha/Spyder_mg995_description.urdf" \
+  "$SPIDER/assets/usd/big_bertha.usd"
 ```
 
 > USD files are tracked via Git LFS (see `.gitattributes`). After conversion, add the `.usd` file using `git lfs track`.
