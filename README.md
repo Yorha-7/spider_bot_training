@@ -14,7 +14,7 @@ Multi-robot locomotion training using PPO on [NVIDIA Isaac Lab](https://isaac-si
 - **200 parallel environments** for efficient training
 - **PPO via RSL-RL and skrl** with tuned hyperparameters
 - **AMP support** via skrl
-- **11 reward terms** — velocity tracking, trot gait, smoothness, joint regularization
+- **12 reward terms** — velocity tracking, trot gait, smoothness, joint regularization
 - **Trot gait** — diagonal foot pairs (FL+RR, FR+RL)
 - **Keyboard teleoperation** — WASD + QE velocity control
 - **Checkpoint export** — JIT and ONNX
@@ -26,7 +26,9 @@ spider_bot_training/
 ├── assets/
 │   ├── gifs/             # demo recordings
 │   ├── images/           # static media
-│   ├── URDF/             # robot URDF + meshes
+│   ├── URDF/
+│   │   ├── spider_rl/       # Spider SG90 URDF
+│   │   └── big_bertha/      # Big Bertha MG995 URDF
 │   └── usd/              # USD robot description files
 ├── scripts/
 │   ├── rsl_rl/           # train.py, play.py, play_teleop.py, cli_args.py
@@ -57,19 +59,41 @@ spider_bot_training/
 ```bash
 # Install the extension
 python -m pip install -e source/spider_rl
+python -m pip install -e source/big_bertha
 ```
 
-## Training
+## URDF → USD Conversion
+
+Convert URDF robot descriptions to USD using Isaac Sim's URDF Importer:
 
 ```bash
-# RSL-RL
-python scripts/rsl_rl/train.py --task spider_3 --num_envs 200 --headless
+# Spider (SG90)
+python -m omni.importer.urdf \
+    --urdf_path assets/URDF/spider_rl/spider_description.urdf \
+    --output_path assets/usd/spider.usd
 
-# skrl
-python scripts/skrl/train.py --task spider_3 --num_envs 200 --headless
+# Big Bertha (MG995)
+python -m omni.importer.urdf \
+    --urdf_path assets/URDF/big_bertha/Spyder_mg995_description.urdf \
+    --output_path assets/usd/big_bertha.usd
+```
 
-# Or use the interactive launcher
-bash scripts/train.sh
+> USD files are tracked via Git LFS (see `.gitattributes`). After conversion, add the `.usd` file using `git lfs track`.
+
+## Package Commands
+
+| Package | Robot | Task ID | RL Engine | Train | Play |
+|---------|-------|---------|-----------|-------|------|
+| `spider_rl` | Spider (SG90) | `spider_3` | RSL-RL | `python scripts/rsl_rl/train.py --task spider_3 --num_envs 200 --headless` | `python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path.pt>` |
+| `spider_rl` | Spider (SG90) | `spider_3` | skrl | `python scripts/skrl/train.py --task spider_3 --num_envs 200 --headless` | `python scripts/skrl/play.py --task spider_3 --checkpoint <path.pt>` |
+| `big_bertha` | Big Bertha (MG995) | `big_bertha` | RSL-RL | `python scripts/rsl_rl/train.py --task big_bertha --num_envs 10000 --max_iterations 1000 --headless` | `python scripts/rsl_rl/play.py --task big_bertha --checkpoint <path.pt>` |
+| `big_bertha` | Big Bertha (MG995) | `big_bertha` | skrl | `python scripts/skrl/train.py --task big_bertha --num_envs 10000 --max_iterations 1000 --headless` | `python scripts/skrl/play.py --task big_bertha --checkpoint <path.pt>` |
+
+### Interactive Launchers
+
+```bash
+bash scripts/train.sh   # interactive train prompt
+bash scripts/play.sh    # interactive play prompt
 ```
 
 ### Resume Training
@@ -79,19 +103,13 @@ python scripts/rsl_rl/train.py --task spider_3 --resume \
     --load_run <run_dir> --checkpoint model_xxxx.pt
 ```
 
-## Inference
+### Fixed Velocity Inference
 
 ```bash
-python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path/to/model.pt>
-
-# Fixed velocity (X Y YAW)
-python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path> --fixed_velocity 0.5 0.0 0.0
-
-# Or use the interactive launcher
-bash scripts/play.sh
+python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path.pt> --fixed_velocity 0.5 0.0 0.0
 ```
 
-## Teleoperation
+### Teleoperation
 
 ```bash
 python scripts/rsl_rl/play_teleop.py --task spider_3
@@ -104,21 +122,46 @@ python scripts/rsl_rl/play_teleop.py --task spider_3
 | Q/E | Turn Left/Right |
 | SPACE | Stop |
 
+### Notes
+
+- **Spider (SG90):** 200 envs default, lightweight (4GB+ VRAM)
+- **Big Bertha (MG995):** heavier model
+  - 8GB+ VRAM: `--num_envs 10000 --max_iterations 1000`
+  - 4–6GB VRAM: `--num_envs 1000 --max_iterations 3000`
+
 ## Reward Terms
+
+### Spider (SG90) — `spider_rl`
 
 | Term | Scale | Purpose |
 |------|-------|---------|
-| lin_vel | 5.0 | Track target velocity |
-| yaw_rate | 1.0 | Track target turning |
-| z_vel | -2.0 | Prevent bouncing |
-| ang_vel | -0.02 | Penalize tilt |
-| joint_torque | -1e-5 | Energy efficiency |
-| joint_accel | -1e-7 | Smooth acceleration |
-| action_rate | -0.01 | Smooth actions |
-| flat_orientation | -1.5 | Keep upright |
-| joint_activity | 0.1 | Encourage joint use |
-| feet_air_time | 0.01 | Foot lift |
-| alternating_gait | 0.2 | Trot coordination |
+| `lin_vel` | 1.5 | Track target velocity |
+| `yaw_rate` | 0.5 | Track target turning |
+| `z_vel` | -0.5 | Prevent bouncing |
+| `ang_vel` | -0.02 | Penalize tilt |
+| `joint_torque` | -1e-5 | Energy efficiency |
+| `joint_accel` | -1e-7 | Smooth acceleration |
+| `action_rate` | -0.01 | Smooth actions |
+| `flat_orientation` | -1.5 | Keep upright |
+| `joint_activity` | 0.1 | Encourage joint use |
+| `feet_air_time` | 0.5 | Foot lift |
+| `alternating_gait` | 2.0 | Trot coordination |
+| `foot_dragging` | -1.0 | Penalize sliding feet |
+
+### Big Bertha (MG995) — `big_bertha`
+
+| Term | Scale | Purpose |
+|------|-------|---------|
+| `lin_vel` | 3.0 | Track target velocity |
+| `z_vel` | -0.25 | Prevent bouncing |
+| `ang_vel` | -0.02 | Penalize tilt |
+| `joint_torque` | -1e-5 | Energy efficiency |
+| `joint_accel` | -1e-7 | Smooth acceleration |
+| `action_rate` | -0.005 | Smooth actions |
+| `flat_orientation` | -1.5 | Keep upright |
+| `joint_activity` | 0.3 | Encourage joint use |
+| `feet_air_time` | 2.5 | Foot lift |
+| `alternating_gait` | 4.0 | Trot coordination |
 
 ## Development
 
@@ -126,13 +169,4 @@ python scripts/rsl_rl/play_teleop.py --task spider_3
 pip install pre-commit
 pre-commit install
 pre-commit run --all-files
-```
-## Note for big_bertha
-```bash
-# with GPU minimum 8GB VRAM
-python scripts/rsl_rl/train.py --task big_bertha --num_envs 10000 --max_iterations 1000 --headless
-```
-```bash
-# with GPU below 6GB VRAM
-python scripts/rsl_rl/train.py --task big_bertha --num_envs 1000 --max_iterations 3000 --headless
 ```

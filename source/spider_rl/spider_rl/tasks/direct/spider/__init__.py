@@ -8,7 +8,7 @@ import gymnasium as gym
 from . import agents
 
 gym.register(
-    id="spider_3",
+    id="spider_rl",
     entry_point=f"{__name__}.spider_env:SpiderEnv",
     disable_env_checker=True,
     kwargs={
