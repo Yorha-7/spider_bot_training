@@ -50,10 +50,32 @@
       <mesh filename="./meshes/ydlidar.stl" scale="0.0001 0.0001 0.0001"/>
     </geometry>
   </collision-->
-
 </link>
 
-  <link name="arm_a_4_1">
+<link name="battery_link">
+  <inertial>
+      <origin xyz="0.04 -0.01 0.02" rpy="0 0 0"/>
+      <mass value="0.2244"/>
+      <inertia ixx="0.00000006" iyy="0.00000008" izz="0.00000010" 
+        ixy="-0.00000000" ixz="0.00000000" iyz="-0.00000000"/>
+  </inertial>
+  
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="./meshes/battery_3s2p.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <!--collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="./meshes/battery_3s2p.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision-->
+</link>
+  
+<link name="arm_a_4_1">
   <inertial>
     <origin xyz="-0.029329716066216552 -0.02813594305937389 -0.02511915559887622" rpy="0 0 0"/>
     <mass value="0.12"/>
@@ -326,7 +348,7 @@
   <axis xyz="-0.707107 0.707107 -0.0"/>
 </joint>
 
-<joint name="Revolute 113" type="continuous">
+<joint name="Revolute_113" type="continuous">
   <origin xyz="0.0802 -0.0649 0.0278" rpy="0 0 0"/>
   <parent link="base_link"/>
   <child link="arm_a_1_1"/>
@@ -390,11 +412,17 @@
 </joint>
 
 <joint name="lidar_joint" type="fixed">
-  <origin xyz="0.01 0 0" rpy="0 0 0"/>
+  <origin xyz="0.01 0.01 0.041" rpy="0 0 0"/>
   <parent link="base_link"/>
   <child link="lidar_link"/>
   <axis xyz="0 0 0"/>
 </joint>
 
+<joint name="battery_joint" type="fixed">
+  <origin xyz="-0.04450 0.015 0.0065" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="battery_link"/>
+  <axis xyz="0 0 0"/>
+</joint>
 
 </robot>
