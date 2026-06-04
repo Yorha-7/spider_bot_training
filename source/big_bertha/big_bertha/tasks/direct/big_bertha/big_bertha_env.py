@@ -116,9 +116,9 @@ class BigberthaEnv(DirectRLEnv):
         backward_penalty = torch.clamp(-tracking, min=0.0) * 2.0
         avg_air = torch.mean(self._contact_sensor.data.current_air_time[:, self._feet_ids], dim=1)
         foot_lift_bonus = 1.0 + torch.clamp(avg_air * 50.0, max=5.0)
-        lin_vel_error_mapped = torch.where(cmd_norm > 0.05,
-            (forward_reward - backward_penalty) * foot_lift_bonus,
-            torch.zeros_like(cmd_norm))
+        lin_vel_error_mapped = torch.where(
+            cmd_norm > 0.05, (forward_reward - backward_penalty) * foot_lift_bonus, torch.zeros_like(cmd_norm)
+        )
         # z velocity tracking
         z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
         # angular velocity x/y
