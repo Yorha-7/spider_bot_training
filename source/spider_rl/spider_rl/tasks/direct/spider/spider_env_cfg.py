@@ -61,7 +61,7 @@ class SpiderEnvCfg(DirectRLEnvCfg):
     decimation = 4
     action_scale = 0.25
     action_space = 12
-    observation_space = 30
+    observation_space = 48
     state_space = 0
 
     # simulation
@@ -106,17 +106,18 @@ class SpiderEnvCfg(DirectRLEnvCfg):
     # robot
     robot: ArticulationCfg = SPIDER_CFG.replace(prim_path="/World/envs/env_.*/Robot")
 
-    # reward scales - SIMPLIFIED FOR STABILITY
-    lin_vel_reward_scale = 5.0  # Velocity tracking reward
-    yaw_rate_reward_scale = 1.0  # Yaw tracking reward
-    z_vel_reward_scale = -2.0  # Reduced vertical velocity penalty
-    ang_vel_reward_scale = -0.02  # Reduced roll/pitch penalty
+    # reward scales - REBALANCED FOR GAIT EMERGENCE
+    lin_vel_reward_scale = 1.5  # Velocity tracking reward (reduced so gait shaping can compete)
+    yaw_rate_reward_scale = 0.5  # Yaw tracking reward (reduced proportionally)
+    z_vel_reward_scale = -0.5  # Vertical velocity penalty (relaxed to allow natural bounce)
+    ang_vel_reward_scale = -0.02  # Roll/pitch penalty
     joint_torque_reward_scale = -1e-5  # Minimal torque penalty
     joint_accel_reward_scale = -1e-7  # Minimal acceleration penalty
     action_rate_reward_scale = -0.01  # Action smoothness
-    flat_orientation_reward_scale = -1.5  # Reduced tilt penalty
+    flat_orientation_reward_scale = -1.5  # Tilt penalty
     joint_activity_reward_scale = 0.1  # Reward for using all joints
     gait_pattern_reward_scale = 0.3  # Deprecated: replaced by feet_air_time and alternating_gait
-    feet_air_time_reward_scale = 0.01  # Reward for individual foot lift
-    alternating_gait_reward_scale = 0.2  # Reward for trot pattern (diagonal pairs)
+    feet_air_time_reward_scale = 0.5  # Increased from 0.01 — reward foot lift meaningfully
+    alternating_gait_reward_scale = 2.0  # Increased from 0.2 — make trot actually matter
+    foot_dragging_penalty_scale = -1.0  # Penalize sliding feet on the ground
     max_tilt_angle_deg = 40.0  # Reset threshold

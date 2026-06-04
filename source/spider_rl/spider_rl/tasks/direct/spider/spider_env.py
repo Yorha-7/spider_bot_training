@@ -63,6 +63,7 @@ class SpiderEnv(DirectRLEnv):
                 "joint_activity",
                 "feet_air_time",
                 "alternating_gait",
+                "foot_dragging",
             ]
         }
 
@@ -84,7 +85,7 @@ class SpiderEnv(DirectRLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: torch.Tensor):
-        self._actions = actions.clone()
+        self._actions = torch.clamp(actions.clone(), -1.0, 1.0)
         self._processed_actions = self.cfg.action_scale * self._actions + self._robot.data.default_joint_pos
 
     def _apply_action(self):
@@ -96,12 +97,12 @@ class SpiderEnv(DirectRLEnv):
             [
                 tensor
                 for tensor in (
-                    #                   self._robot.data.root_lin_vel_b,
-                    #                   self._robot.data.root_ang_vel_b,
                     self._robot.data.projected_gravity_b,
+                    self._robot.data.root_lin_vel_b,
+                    self._robot.data.root_ang_vel_b,
                     self._commands,
                     self._robot.data.joint_pos - self._robot.data.default_joint_pos,
-                    #                    self._robot.data.joint_vel,
+                    self._robot.data.joint_vel,
                     self._actions,
                 )
                 if tensor is not None
@@ -136,15 +137,26 @@ class SpiderEnv(DirectRLEnv):
         num_joints = self._robot.data.joint_pos.shape[1]
         joint_activity = joint_vel_magnitude / num_joints
 
-        # A) Individual feet air time reward
+        # A) Individual feet air time reward (allow longer lift for natural gait)
         feet_air_time = self._contact_sensor.data.current_air_time[:, self._feet_ids]
+        feet_air_time = torch.clamp(feet_air_time, max=1.0)
         feet_air_time_reward = torch.mean(feet_air_time, dim=1)
 
-        # B) Alternating gait reward (trot: diagonal pairs in air)
-        feet_in_air = self._contact_sensor.data.current_air_time[:, self._feet_ids] > 0.001
-        pair1_in_air = feet_in_air[:, self._foot_pairs[0][0]] & feet_in_air[:, self._foot_pairs[0][1]]
-        pair2_in_air = feet_in_air[:, self._foot_pairs[1][0]] & feet_in_air[:, self._foot_pairs[1][1]]
-        alternating_gait_reward = (pair1_in_air | pair2_in_air).float()
+        # B) Alternating gait reward — continuous, not binary
+        feet_air_time_vals = self._contact_sensor.data.current_air_time[:, self._feet_ids]
+        # Synchronization within each diagonal pair (0=same air time = perfect)
+        pair1_sync = torch.exp(-torch.abs(feet_air_time_vals[:, 0] - feet_air_time_vals[:, 3]) / 0.05)
+        pair2_sync = torch.exp(-torch.abs(feet_air_time_vals[:, 1] - feet_air_time_vals[:, 2]) / 0.05)
+        # Opposition between diagonal pairs (when one is up, other should be down)
+        avg_pair1 = (feet_air_time_vals[:, 0] + feet_air_time_vals[:, 3]) / 2.0
+        avg_pair2 = (feet_air_time_vals[:, 1] + feet_air_time_vals[:, 2]) / 2.0
+        phase_opposition = torch.exp(-torch.square(avg_pair1 - avg_pair2) / 0.05)
+        alternating_gait_reward = (pair1_sync + pair2_sync + phase_opposition) / 3.0
+
+        # C) Foot dragging penalty — penalize base motion when all 4 feet are on ground
+        all_feet_contact = torch.all(self._contact_sensor.data.current_air_time[:, self._feet_ids] < 0.001, dim=1)
+        body_speed = torch.norm(self._robot.data.root_lin_vel_b[:, :2], dim=1)
+        foot_dragging = all_feet_contact.float() * body_speed
 
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
@@ -158,6 +170,7 @@ class SpiderEnv(DirectRLEnv):
             "joint_activity": joint_activity * self.cfg.joint_activity_reward_scale * self.step_dt,
             "feet_air_time": feet_air_time_reward * self.cfg.feet_air_time_reward_scale * self.step_dt,
             "alternating_gait": alternating_gait_reward * self.cfg.alternating_gait_reward_scale * self.step_dt,
+            "foot_dragging": foot_dragging * self.cfg.foot_dragging_penalty_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -170,7 +183,7 @@ class SpiderEnv(DirectRLEnv):
         died = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         net_contact_forces = self._contact_sensor.data.net_forces_w_history
         died = torch.any(
-            torch.max(torch.norm(net_contact_forces[:, :, self._die_body_ids], dim=-1), dim=1)[0] > 1.0, dim=1
+            torch.max(torch.norm(net_contact_forces[:, :, self._die_body_ids], dim=-1), dim=1)[0] > 50.0, dim=1
         )
         return died, time_out
 
@@ -184,8 +197,13 @@ class SpiderEnv(DirectRLEnv):
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
-        # Sample new commands
-        self._commands[env_ids] = torch.zeros_like(self._commands[env_ids]).uniform_(-1.0, 1.0)
+        # Sample new commands with curriculum-safe range
+        # Linear velocities: X = [-0.5, 0.5] m/s, Y = [-0.3, 0.3] m/s
+        # Yaw rate: [-0.5, 0.5] rad/s
+        self._commands[env_ids] = torch.zeros_like(self._commands[env_ids])
+        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
+        self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.3, 0.3)
+        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
         # Reset robot state
         joint_pos = self._robot.data.default_joint_pos[env_ids]
         joint_vel = self._robot.data.default_joint_vel[env_ids]
