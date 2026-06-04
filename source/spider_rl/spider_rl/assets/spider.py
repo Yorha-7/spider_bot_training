@@ -12,7 +12,7 @@ from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
-_USD_PATH = os.path.join(_REPO_ROOT, "assets","spider_rl", "usd", "spider.usd")
+_USD_PATH = os.path.join(_REPO_ROOT, "assets", "spider_rl", "usd", "spider.usd")
 
 SPIDER_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
