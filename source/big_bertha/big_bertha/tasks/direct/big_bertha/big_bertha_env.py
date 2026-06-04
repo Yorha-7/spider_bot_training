@@ -33,8 +33,8 @@ class BigberthaEnv(DirectRLEnv):
             self.num_envs, gym.spaces.flatdim(self.single_action_space), device=self.device
         )
 
-        # X/Y linear velocity and yaw angular velocity commands
-        self._commands = torch.zeros(self.num_envs, 3, device=self.device)
+        # X/Y linear velocity commands
+        self._commands = torch.zeros(self.num_envs, 2, device=self.device)
 
         # Get specific body indices
         self._base_id, _ = self._contact_sensor.find_bodies("base_link")
@@ -49,7 +49,6 @@ class BigberthaEnv(DirectRLEnv):
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
                 "track_lin_vel_xy_exp",
-                "track_ang_vel_z_exp",
                 "lin_vel_z_l2",
                 "ang_vel_xy_l2",
                 "dof_torques_l2",
@@ -80,7 +79,7 @@ class BigberthaEnv(DirectRLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: torch.Tensor):
-        self._actions = actions.clone()
+        self._actions = torch.clamp(actions.clone(), -1.0, 1.0)
         self._processed_actions = self.cfg.action_scale * self._actions + self._robot.data.default_joint_pos
 
     def _apply_action(self):
@@ -92,12 +91,12 @@ class BigberthaEnv(DirectRLEnv):
             [
                 tensor
                 for tensor in (
-                    #                    self._robot.data.root_lin_vel_b,
-                    #                    self._robot.data.root_ang_vel_b,
+                    self._robot.data.root_lin_vel_b,
+                    self._robot.data.root_ang_vel_b,
                     self._robot.data.projected_gravity_b,
                     self._commands,
                     self._robot.data.joint_pos - self._robot.data.default_joint_pos,
-                    #                    self._robot.data.joint_vel,
+                    self._robot.data.joint_vel,
                     self._actions,
                 )
                 if tensor is not None
@@ -108,12 +107,18 @@ class BigberthaEnv(DirectRLEnv):
         return observations
 
     def _get_rewards(self) -> torch.Tensor:
-        # linear velocity tracking
-        lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b[:, :2]), dim=1)
-        lin_vel_error_mapped = torch.exp(-lin_vel_error / 0.25)
-        # yaw rate tracking
-        yaw_rate_error = torch.square(self._commands[:, 2] - self._robot.data.root_ang_vel_b[:, 2])
-        yaw_rate_error_mapped = torch.exp(-yaw_rate_error / 0.25)
+        # Linear velocity tracking: signed fraction of target, no free reward at standstill
+        vel = self._robot.data.root_lin_vel_b[:, :2]
+        cmd = self._commands[:, :2]
+        cmd_norm = torch.norm(cmd, dim=1)
+        tracking = torch.sum(cmd * vel, dim=1) / (cmd_norm * cmd_norm + 1e-8)
+        forward_reward = torch.clamp(tracking, min=0.0)
+        backward_penalty = torch.clamp(-tracking, min=0.0) * 2.0
+        avg_air = torch.mean(self._contact_sensor.data.current_air_time[:, self._feet_ids], dim=1)
+        foot_lift_bonus = 1.0 + torch.clamp(avg_air * 50.0, max=5.0)
+        lin_vel_error_mapped = torch.where(cmd_norm > 0.05,
+            (forward_reward - backward_penalty) * foot_lift_bonus,
+            torch.zeros_like(cmd_norm))
         # z velocity tracking
         z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
         # angular velocity x/y
@@ -132,19 +137,25 @@ class BigberthaEnv(DirectRLEnv):
         num_joints = self._robot.data.joint_pos.shape[1]
         joint_activity = joint_vel_magnitude / num_joints
 
-        # A) Individual feet air time reward
+        # A) Individual feet air time reward (allow longer lift for natural gait)
         feet_air_time = self._contact_sensor.data.current_air_time[:, self._feet_ids]
+        feet_air_time = torch.clamp(feet_air_time, max=1.0)
         feet_air_time_reward = torch.mean(feet_air_time, dim=1)
 
-        # B) Alternating gait reward (trot: diagonal pairs in air)
-        feet_in_air = self._contact_sensor.data.current_air_time[:, self._feet_ids] > 0.001
-        pair1_in_air = feet_in_air[:, self._foot_pairs[0][0]] & feet_in_air[:, self._foot_pairs[0][1]]
-        pair2_in_air = feet_in_air[:, self._foot_pairs[1][0]] & feet_in_air[:, self._foot_pairs[1][1]]
-        alternating_gait_reward = (pair1_in_air | pair2_in_air).float()
+        # B) Alternating gait reward — relative phase, bootstraps from zero
+        feet_air_time_vals = self._contact_sensor.data.current_air_time[:, self._feet_ids]
+        total_air = torch.sum(feet_air_time_vals, dim=1, keepdim=True) + 1e-8
+        rel_air = feet_air_time_vals / total_air
+        pair1_sync = torch.exp(-torch.abs(rel_air[:, 0] - rel_air[:, 3]) / 0.05)
+        pair2_sync = torch.exp(-torch.abs(rel_air[:, 1] - rel_air[:, 2]) / 0.05)
+        avg_rel1 = (rel_air[:, 0] + rel_air[:, 3]) / 2.0
+        avg_rel2 = (rel_air[:, 1] + rel_air[:, 2]) / 2.0
+        phase_opposition = torch.exp(-torch.square(avg_rel1 - avg_rel2) / 0.05)
+        alternating_gait_reward = (pair1_sync + pair2_sync + phase_opposition) / 3.0
+        alternating_gait_reward = alternating_gait_reward * torch.clamp(total_air.squeeze() * 4.0, max=1.0)
 
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
-            "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
             "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
             "ang_vel_xy_l2": ang_vel_error * self.cfg.ang_vel_reward_scale * self.step_dt,
             "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
@@ -166,7 +177,7 @@ class BigberthaEnv(DirectRLEnv):
         died = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         net_contact_forces = self._contact_sensor.data.net_forces_w_history
         died = torch.any(
-            torch.max(torch.norm(net_contact_forces[:, :, self._die_body_ids], dim=-1), dim=1)[0] > 1.0, dim=1
+            torch.max(torch.norm(net_contact_forces[:, :, self._die_body_ids], dim=-1), dim=1)[0] > 50.0, dim=1
         )
         return died, time_out
 
@@ -180,8 +191,10 @@ class BigberthaEnv(DirectRLEnv):
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
-        # Sample new commands
-        self._commands[env_ids] = torch.zeros_like(self._commands[env_ids]).uniform_(-1.0, 1.0)
+        # Sample new xy velocity commands
+        self._commands[env_ids] = torch.zeros_like(self._commands[env_ids])
+        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
+        self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.3, 0.3)
         # Reset robot state
         joint_pos = self._robot.data.default_joint_pos[env_ids]
         joint_vel = self._robot.data.default_joint_vel[env_ids]

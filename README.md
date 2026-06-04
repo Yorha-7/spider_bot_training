@@ -127,3 +127,12 @@ pip install pre-commit
 pre-commit install
 pre-commit run --all-files
 ```
+## Note for big_bertha
+```bash
+# with GPU minimum 8GB VRAM
+python scripts/rsl_rl/train.py --task big_bertha --num_envs 10000 --max_iterations 1000 --headless
+```
+```bash
+# with GPU below 6GB VRAM
+python scripts/rsl_rl/train.py --task big_bertha --num_envs 1000 --max_iterations 3000 --headless
+```
