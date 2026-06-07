@@ -31,7 +31,7 @@ spider_bot_training/
 │   │   └── big_bertha/      # Big Bertha MG995 URDF
 │   └── usd/              # USD robot description files
 ├── scripts/
-│   ├── rsl_rl/           # train.py, play.py, play_teleop.py, cli_args.py
+│   ├── rsl_rl/           # train.py, play.py, play_fixed_vel.py, play_teleop.py, cli_args.py
 │   ├── skrl/             # train.py, play.py
 │   ├── random_agent.py
 │   ├── zero_agent.py
@@ -94,6 +94,7 @@ python3 "$ISAACLAB/scripts/tools/convert_urdf.py" \
 | `spider_rl` | Spider (SG90) | `spider_3` | skrl | `python scripts/skrl/train.py --task spider_3 --num_envs 200 --headless` | `python scripts/skrl/play.py --task spider_3 --checkpoint <path.pt>` |
 | `big_bertha` | Big Bertha (MG995) | `big_bertha` | RSL-RL | `python scripts/rsl_rl/train.py --task big_bertha --num_envs 10000 --max_iterations 1000 --headless` | `python scripts/rsl_rl/play.py --task big_bertha --checkpoint <path.pt>` |
 | `big_bertha` | Big Bertha (MG995) | `big_bertha` | skrl | `python scripts/skrl/train.py --task big_bertha --num_envs 10000 --max_iterations 1000 --headless` | `python scripts/skrl/play.py --task big_bertha --checkpoint <path.pt>` |
+| `big_bertha` | Big Bertha (MG995) | `big_bertha` | RSL-RL (fixed vel) | — | `python scripts/rsl_rl/play_fixed_vel.py --task big_bertha --checkpoint <path.pt> --vx 0.3 --omega 0.0` |
 
 ### Interactive Launchers
 
@@ -112,7 +113,11 @@ python scripts/rsl_rl/train.py --task spider_3 --resume \
 ### Fixed Velocity Inference
 
 ```bash
+# Spider (SG90)
 python scripts/rsl_rl/play.py --task spider_3 --checkpoint <path.pt> --fixed_velocity 0.5 0.0 0.0
+
+# Big Bertha (MG995) — run at fixed forward/turning velocity
+python scripts/rsl_rl/play_fixed_vel.py --task big_bertha --checkpoint <path.pt> --vx 0.3 --vy 0.0 --omega 0.0 --real-time
 ```
 
 ### Teleoperation
@@ -167,6 +172,7 @@ python scripts/rsl_rl/play_teleop.py --task spider_3
 | `flat_orientation` | -1.5 | Keep upright |
 | `joint_activity` | 0.3 | Encourage joint use |
 | `feet_air_time` | 2.5 | Foot lift |
+| `yaw_rate` | 3.0 | Track target turning |
 | `alternating_gait` | 4.0 | Trot coordination |
 
 ## Development

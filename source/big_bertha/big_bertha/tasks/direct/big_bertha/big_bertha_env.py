@@ -203,9 +203,9 @@ class BigberthaEnv(DirectRLEnv):
         self._previous_actions[env_ids] = 0.0
         # Sample new xy velocity commands
         self._commands[env_ids] = torch.zeros_like(self._commands[env_ids])
-        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
-        self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.3, 0.3)
-        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
+        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(-0.2, 0.2)
+        self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.2, 0.2)
+        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.2, 0.2)
         # Reset robot state
         joint_pos = self._robot.data.default_joint_pos[env_ids]
         joint_vel = self._robot.data.default_joint_vel[env_ids]
