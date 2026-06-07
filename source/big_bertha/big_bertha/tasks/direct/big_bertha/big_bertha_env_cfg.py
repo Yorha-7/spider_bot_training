@@ -58,7 +58,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     decimation = 4
     action_scale = 0.25
     action_space = 12
-    observation_space = 47
+    observation_space = 48
     state_space = 0
 
     # simulation
@@ -115,4 +115,5 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     gait_pattern_reward_scale = 1.0  # Deprecated: replaced by feet_air_time and alternating_gait
     feet_air_time_reward_scale = 2.5  # Increased from 1.5 — push air time higher
     alternating_gait_reward_scale = 4.0  # Increased from 2.0 — drive cleaner trot
+    yaw_rate_reward_scale = 3.0  # Yaw tracking reward (matches lin_vel scale)
     max_tilt_angle_deg = 40.0  # Reset threshold
