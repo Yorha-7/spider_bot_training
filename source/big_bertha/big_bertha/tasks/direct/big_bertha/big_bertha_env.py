@@ -33,8 +33,8 @@ class BigberthaEnv(DirectRLEnv):
             self.num_envs, gym.spaces.flatdim(self.single_action_space), device=self.device
         )
 
-        # X/Y linear velocity commands
-        self._commands = torch.zeros(self.num_envs, 2, device=self.device)
+        # X/Y linear velocity + yaw angular velocity commands
+        self._commands = torch.zeros(self.num_envs, 3, device=self.device)
 
         # Get specific body indices
         self._base_id, _ = self._contact_sensor.find_bodies("base_link")
@@ -58,6 +58,7 @@ class BigberthaEnv(DirectRLEnv):
                 "joint_activity",
                 "feet_air_time",
                 "alternating_gait",
+                "track_ang_vel_z_exp",
             ]
         }
 
@@ -123,6 +124,14 @@ class BigberthaEnv(DirectRLEnv):
         z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
         # angular velocity x/y
         ang_vel_error = torch.sum(torch.square(self._robot.data.root_ang_vel_b[:, :2]), dim=1)
+        # yaw rate tracking: signed fraction of target (matches lin_vel style)
+        cmd_z = self._commands[:, 2]
+        ang_vel_z = self._robot.data.root_ang_vel_b[:, 2]
+        cmd_z_norm = torch.abs(cmd_z)
+        yaw_tracking = cmd_z * ang_vel_z / (cmd_z_norm * cmd_z_norm + 1e-8)
+        yaw_forward = torch.clamp(yaw_tracking, min=0.0)
+        yaw_backward = torch.clamp(-yaw_tracking, min=0.0) * 2.0
+        yaw_reward = torch.where(cmd_z_norm > 0.05, yaw_forward - yaw_backward, torch.zeros_like(cmd_z_norm))
         # joint torques
         joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
         # joint acceleration
@@ -165,6 +174,7 @@ class BigberthaEnv(DirectRLEnv):
             "joint_activity": joint_activity * self.cfg.joint_activity_reward_scale * self.step_dt,
             "feet_air_time": feet_air_time_reward * self.cfg.feet_air_time_reward_scale * self.step_dt,
             "alternating_gait": alternating_gait_reward * self.cfg.alternating_gait_reward_scale * self.step_dt,
+            "track_ang_vel_z_exp": yaw_reward * self.cfg.yaw_rate_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -195,6 +205,7 @@ class BigberthaEnv(DirectRLEnv):
         self._commands[env_ids] = torch.zeros_like(self._commands[env_ids])
         self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
         self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.3, 0.3)
+        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
         # Reset robot state
         joint_pos = self._robot.data.default_joint_pos[env_ids]
         joint_vel = self._robot.data.default_joint_vel[env_ids]
