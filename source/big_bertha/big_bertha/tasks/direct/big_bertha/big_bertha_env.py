@@ -36,13 +36,22 @@ class BigberthaEnv(DirectRLEnv):
         # X/Y linear velocity + yaw angular velocity commands
         self._commands = torch.zeros(self.num_envs, 3, device=self.device)
 
+        # Per-dim observation noise std (lazily built on device in _get_observations)
+        self._obs_noise_std = None
+
         # Get specific body indices
         self._base_id, _ = self._contact_sensor.find_bodies("base_link")
-        self._feet_ids, _ = self._contact_sensor.find_bodies(["arm_c_1_1", "arm_c_2_1", "arm_c_3_1", "arm_c_4_1"])
+        # preserve_order=True so the returned order matches this list exactly:
+        # arm_c_1=FR(idx0), arm_c_2=FL(idx1), arm_c_3=RL(idx2), arm_c_4=RR(idx3),
+        # verified against the foot positions in the base frame from the URDF.
+        self._feet_ids, _ = self._contact_sensor.find_bodies(
+            ["arm_c_1_1", "arm_c_2_1", "arm_c_3_1", "arm_c_4_1"], preserve_order=True
+        )
         self._die_body_ids, _ = self._contact_sensor.find_bodies(["arm_a_1_1", "arm_a_2_1", "arm_a_3_1", "arm_a_4_1"])
-        # Foot pairs for alternating gait (trot gait)
-        # FL=0, FR=1, RL=2, RR=3 (order from find_bodies(".*_calf_link"))
-        self._foot_pairs = [[0, 3], [1, 2]]  # [FL+RR, FR+RL]
+        # Diagonal foot pairs for the trot: {FR,RL}={0,2} swing together while
+        # {FL,RR}={1,3} are in stance, then swap. (Was [[0,3],[1,2]] = same-side
+        # legs, which let the policy satisfy the gait reward with a pronk.)
+        self._foot_pairs = [[0, 2], [1, 3]]  # [FR+RL, FL+RR] diagonals
 
         # Logging
         self._episode_sums = {
@@ -57,8 +66,9 @@ class BigberthaEnv(DirectRLEnv):
                 "flat_orientation_l2",
                 "joint_activity",
                 "feet_air_time",
-                "alternating_gait",
+                "crawl_gait",
                 "track_ang_vel_z_exp",
+                "forward_progress",
             ]
         }
 
@@ -82,6 +92,16 @@ class BigberthaEnv(DirectRLEnv):
     def _pre_physics_step(self, actions: torch.Tensor):
         self._actions = torch.clamp(actions.clone(), -1.0, 1.0)
         self._processed_actions = self.cfg.action_scale * self._actions + self._robot.data.default_joint_pos
+        # Action (joint-target) noise: the deployed gazebo joints track the
+        # position targets through an explicit effort-PD that overshoots/lags
+        # vs Isaac's implicit actuator, so the realised joint trajectory differs
+        # from the commanded one. Perturbing the target here (unobserved) forces
+        # the policy to learn a gait that is stable under imperfect tracking
+        # instead of a fragile, Isaac-exact one that drifts/veers in gazebo.
+        if self.cfg.action_noise_std > 0.0:
+            self._processed_actions = self._processed_actions + (
+                torch.randn_like(self._processed_actions) * self.cfg.action_noise_std
+            )
 
     def _apply_action(self):
         self._robot.set_joint_position_target(self._processed_actions)
@@ -104,34 +124,52 @@ class BigberthaEnv(DirectRLEnv):
             ],
             dim=-1,
         )
+        # Observation noise for sim-to-sim robustness. In Isaac the robot trains
+        # nearly level (projected_gravity_x std ~0.03), but in gazebo its forward
+        # CoM tips the body ~14 deg -> grav_x reads -0.24, which is 8+ sigma OOD
+        # and saturates the deployed policy into a frozen, railed stance (audited
+        # live). Injecting noise here widens the baked obs-normalizer so the same
+        # gazebo reading lands ~2 sigma instead of ~8, and forces the policy to
+        # tolerate body tilt + joint-velocity jitter rather than memorising the
+        # clean Isaac signal. Commands/prev_actions are exact (zero noise).
+        if self._obs_noise_std is None:
+            self._obs_noise_std = torch.tensor(
+                [0.10] * 3 + [0.20] * 3 + [0.12] * 3 + [0.0] * 3 + [0.03] * 12 + [0.6] * 12 + [0.0] * 12,
+                device=self.device,
+            )
+        obs = obs + torch.randn_like(obs) * self._obs_noise_std
         observations = {"policy": obs}
         return observations
 
     def _get_rewards(self) -> torch.Tensor:
-        # Linear velocity tracking: signed fraction of target, no free reward at standstill
-        vel = self._robot.data.root_lin_vel_b[:, :2]
-        cmd = self._commands[:, :2]
-        cmd_norm = torch.norm(cmd, dim=1)
-        tracking = torch.sum(cmd * vel, dim=1) / (cmd_norm * cmd_norm + 1e-8)
-        forward_reward = torch.clamp(tracking, min=0.0)
-        backward_penalty = torch.clamp(-tracking, min=0.0) * 2.0
-        avg_air = torch.mean(self._contact_sensor.data.current_air_time[:, self._feet_ids], dim=1)
-        foot_lift_bonus = 1.0 + torch.clamp(avg_air * 50.0, max=5.0)
-        lin_vel_error_mapped = torch.where(
-            cmd_norm > 0.05, (forward_reward - backward_penalty) * foot_lift_bonus, torch.zeros_like(cmd_norm)
+        # Linear velocity tracking — SHARP Gaussian on the xy command error.
+        # sigma^2 was 0.25, which is far too lenient for the small forward
+        # commands here: standing still at cmd 0.2 still scored exp(-0.04/0.25)
+        # = 0.85, so the policy learned to shuffle in place (collecting the gait
+        # rewards) and never translated -- the trained linvel_x distribution was
+        # mean ~0, std 0.045. sigma^2=0.1 makes standing clearly sub-optimal
+        # (~0.05 at the mean command) so the policy must actually move.
+        lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b[:, :2]), dim=1)
+        lin_vel_reward = torch.exp(-lin_vel_error / 0.1)
+        # Forward progress — body-frame x velocity, rewarded LINEARLY (no
+        # saturation at standstill, unlike the exp term). With forward-only
+        # commands this guarantees moving always beats standing, breaking the
+        # shuffle-in-place local optimum. Gated on a forward command.
+        fwd_vel = self._robot.data.root_lin_vel_b[:, 0]
+        forward_progress = torch.where(
+            self._commands[:, 0] > 0.05,
+            torch.clamp(fwd_vel, min=0.0, max=0.4),  # crawl is slow; don't pay for speed
+            torch.zeros_like(fwd_vel),
         )
         # z velocity tracking
         z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
         # angular velocity x/y
         ang_vel_error = torch.sum(torch.square(self._robot.data.root_ang_vel_b[:, :2]), dim=1)
-        # yaw rate tracking: signed fraction of target (matches lin_vel style)
-        cmd_z = self._commands[:, 2]
-        ang_vel_z = self._robot.data.root_ang_vel_b[:, 2]
-        cmd_z_norm = torch.abs(cmd_z)
-        yaw_tracking = cmd_z * ang_vel_z / (cmd_z_norm * cmd_z_norm + 1e-8)
-        yaw_forward = torch.clamp(yaw_tracking, min=0.0)
-        yaw_backward = torch.clamp(-yaw_tracking, min=0.0) * 2.0
-        yaw_reward = torch.where(cmd_z_norm > 0.05, yaw_forward - yaw_backward, torch.zeros_like(cmd_z_norm))
+        # yaw rate tracking — sharp Gaussian on the yaw-rate error, same shape as
+        # lin_vel. No 1/|cmd|^2 blow-up (that term reached 13-22 in training and
+        # made spinning the dominant reward).
+        yaw_rate_error = torch.square(self._commands[:, 2] - self._robot.data.root_ang_vel_b[:, 2])
+        yaw_reward = torch.exp(-yaw_rate_error / 0.1)
         # joint torques
         joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
         # joint acceleration
@@ -151,20 +189,22 @@ class BigberthaEnv(DirectRLEnv):
         feet_air_time = torch.clamp(feet_air_time, max=1.0)
         feet_air_time_reward = torch.mean(feet_air_time, dim=1)
 
-        # B) Alternating gait reward — relative phase, bootstraps from zero
-        feet_air_time_vals = self._contact_sensor.data.current_air_time[:, self._feet_ids]
-        total_air = torch.sum(feet_air_time_vals, dim=1, keepdim=True) + 1e-8
-        rel_air = feet_air_time_vals / total_air
-        pair1_sync = torch.exp(-torch.abs(rel_air[:, 0] - rel_air[:, 3]) / 0.05)
-        pair2_sync = torch.exp(-torch.abs(rel_air[:, 1] - rel_air[:, 2]) / 0.05)
-        avg_rel1 = (rel_air[:, 0] + rel_air[:, 3]) / 2.0
-        avg_rel2 = (rel_air[:, 1] + rel_air[:, 2]) / 2.0
-        phase_opposition = torch.exp(-torch.square(avg_rel1 - avg_rel2) / 0.05)
-        alternating_gait_reward = (pair1_sync + pair2_sync + phase_opposition) / 3.0
-        alternating_gait_reward = alternating_gait_reward * torch.clamp(total_air.squeeze() * 4.0, max=1.0)
+        # B) Crawl / wave gait reward — spider-like single-leg sequence: exactly
+        # ONE foot in a sustained swing at a time while the other three stay
+        # planted, cycling through all four legs. `lead_air` rewards the airborne
+        # foot for a REAL swing (clamped to 0.35 s) -- this kills the degenerate
+        # 1-timestep foot-flicks that an earlier (air_time > 1e-4) version let the
+        # policy game in place. `single` gates it to a single airborne foot, so a
+        # trot (2 up) or pronk (4 up) score ~0. n_swing only counts feet airborne
+        # >30 ms so micro-bounces of the planted feet don't break the gate.
+        feet_air_c = self._contact_sensor.data.current_air_time[:, self._feet_ids]
+        n_swing = (feet_air_c > 0.03).float().sum(dim=1)  # feet in a real swing
+        lead_air = torch.clamp(feet_air_c.max(dim=1).values, max=0.35) / 0.35  # 0..1
+        single = torch.exp(-torch.square(n_swing - 1.0) / 0.4)  # peak at exactly one
+        crawl_gait_reward = lead_air * single
 
         rewards = {
-            "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
+            "track_lin_vel_xy_exp": lin_vel_reward * self.cfg.lin_vel_reward_scale * self.step_dt,
             "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
             "ang_vel_xy_l2": ang_vel_error * self.cfg.ang_vel_reward_scale * self.step_dt,
             "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
@@ -173,8 +213,9 @@ class BigberthaEnv(DirectRLEnv):
             "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
             "joint_activity": joint_activity * self.cfg.joint_activity_reward_scale * self.step_dt,
             "feet_air_time": feet_air_time_reward * self.cfg.feet_air_time_reward_scale * self.step_dt,
-            "alternating_gait": alternating_gait_reward * self.cfg.alternating_gait_reward_scale * self.step_dt,
+            "crawl_gait": crawl_gait_reward * self.cfg.crawl_gait_reward_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_reward * self.cfg.yaw_rate_reward_scale * self.step_dt,
+            "forward_progress": forward_progress * self.cfg.forward_progress_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -201,11 +242,15 @@ class BigberthaEnv(DirectRLEnv):
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
-        # Sample new xy velocity commands
+        # Sample new velocity commands. Forward-biased curriculum: the demo
+        # drives the robot forward, so x is mostly positive (up to 0.6 m/s, which
+        # brackets the 0.3 m/s demo command), with modest lateral and yaw for
+        # steering. The previous symmetric +/-0.2 box gave no reason to prefer
+        # forward, so the policy never committed to translating.
         self._commands[env_ids] = torch.zeros_like(self._commands[env_ids])
-        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(-0.2, 0.2)
-        self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.2, 0.2)
-        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.2, 0.2)
+        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.15, 0.4)
+        self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.05, 0.05)
+        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.15, 0.15)
         # Reset robot state
         joint_pos = self._robot.data.default_joint_pos[env_ids]
         joint_vel = self._robot.data.default_joint_vel[env_ids]
