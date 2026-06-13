@@ -91,7 +91,14 @@ BIG_BERTHA_CFG = ArticulationCfg(
                 "Revolute_121",
             ],
             effort_limit=1.0,
-            velocity_limit=5.55,
+            # velocity_limit lowered 5.55 -> 4.0 rad/s to match the real MG995
+            # servos (issue #35: the policy drove its joints faster than the
+            # hardware can). The MG995 is rated ~0.17-0.20 s/60deg at 4.8-6V,
+            # i.e. 60deg / 0.20s = ~5.2 rad/s NO-LOAD; under the leg load it is
+            # appreciably slower, so 4.0 rad/s is a realistic in-service ceiling
+            # rather than the servo's unloaded top speed it can never hit on the
+            # robot.
+            velocity_limit=4.0,
             stiffness=20.0,
             damping=2.0,
         ),

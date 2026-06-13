@@ -64,8 +64,10 @@ _build
 # Teleop Recorded Dataset
 /datasets/
 
-# Tests
-tests/
+# Tests — ignore local scratch/output but keep the committed CI-safe test suite.
+tests/*
+!tests/test_*.py
+tests/__pycache__/
 
 # Docker history
 .isaac-lab-docker-history

@@ -144,6 +144,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # override commands with fixed velocities
     fixed_cmd = torch.tensor([args_cli.vx, args_cli.vy, args_cli.omega], device=env.unwrapped.device)
     env.unwrapped._commands[:] = fixed_cmd
+    # Register the override on the env so its _reset_idx re-applies these fixed
+    # values instead of sampling random commands. Without this, an env that
+    # resets mid-playback gets a random forward command baked into the very next
+    # observation, so setting vx=vy=omega=0 still produced motion (issue #40).
+    env.unwrapped._command_override = fixed_cmd
     print(f"[INFO] Fixed velocity commands: vx={args_cli.vx}, vy={args_cli.vy}, omega={args_cli.omega}")
 
     # wrap for video recording

@@ -147,7 +147,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     joint_accel_reward_scale = -1e-7  # Minimal acceleration penalty
     action_rate_reward_scale = -0.01  # Action smoothness (stronger for a cleaner gait)
     flat_orientation_reward_scale = -1.5  # Tilt penalty
-    joint_activity_reward_scale = 0.0  # Removed: rewarded raw joint speed -> thrashing/spin
+    joint_activity_reward_scale = -0.01  # PENALTY on mean|joint_vel| (issue #35): discourage fast joint motion
     gait_pattern_reward_scale = 1.0  # Deprecated: replaced by feet_air_time and alternating_gait
     feet_air_time_reward_scale = 0.5  # encourage all four legs to take a swing turn
     crawl_gait_reward_scale = 5.0  # one foot swings at a time (spider crawl pattern)
