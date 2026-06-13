@@ -35,6 +35,11 @@ class BigberthaEnv(DirectRLEnv):
 
         # X/Y linear velocity + yaw angular velocity commands
         self._commands = torch.zeros(self.num_envs, 3, device=self.device)
+        # Optional fixed-command override (shape (3,) [vx, vy, omega]). When set
+        # (e.g. by play_fixed_vel.py), _reset_idx applies it INSTEAD of sampling
+        # random commands, so explicit zero commands keep the robot stationary
+        # instead of inheriting a random forward command on every reset (#40).
+        self._command_override = None
 
         # Per-dim observation noise std (lazily built on device in _get_observations)
         self._obs_noise_std = None
@@ -248,9 +253,21 @@ class BigberthaEnv(DirectRLEnv):
         # steering. The previous symmetric +/-0.2 box gave no reason to prefer
         # forward, so the policy never committed to translating.
         self._commands[env_ids] = torch.zeros_like(self._commands[env_ids])
-        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.15, 0.4)
+        # Forward command range narrowed 0.15-0.4 -> 0.1-0.3 m/s (issue #35): the
+        # MG995-limited legs (velocity_limit 4.0 rad/s) cannot sustain the upper
+        # 0.4 m/s, so commanding it only taught the policy to move too fast for
+        # its own good. 0.3 m/s still brackets the 0.3 m/s demo command while
+        # staying inside what the hardware can actually deliver.
+        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.1, 0.3)
         self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.05, 0.05)
         self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.15, 0.15)
+        # If a fixed-command override is active, replace the freshly sampled
+        # random commands for the reset envs with the user's fixed values. This
+        # runs BEFORE _get_observations, so the policy never sees a stray random
+        # command after a mid-episode reset (issue #40: zero vx/vy/omega must
+        # keep the robot stationary).
+        if self._command_override is not None:
+            self._commands[env_ids] = self._command_override.to(self._commands.device)
         # Reset robot state
         joint_pos = self._robot.data.default_joint_pos[env_ids]
         joint_vel = self._robot.data.default_joint_vel[env_ids]
