@@ -208,8 +208,8 @@ class BigberthaEnv(DirectRLEnv):
         single = torch.exp(-torch.square(n_swing - 1.0) / 0.4)  # peak at exactly one
         # GATE on forward motion (issue #46): the one-at-a-time pattern only pays
         # when the body is actually TRANSLATING. Without this, the policy farmed
-        # crawl_gait by lifting feet one-at-a-time IN PLACE -- 99% of the positive
-        # reward was earnable standing still. fwd_gate ramps 0->1 over 0..0.15 m/s.
+        # crawl_gait by lifting feet one-at-a-time IN PLACE -- 99% of reward was
+        # earnable standing still. fwd_gate ramps 0->1 over fwd_vel 0..0.15 m/s.
         fwd_gate = torch.clamp(fwd_vel / 0.15, 0.0, 1.0)
         crawl_gait_reward = lead_air * single * fwd_gate
 

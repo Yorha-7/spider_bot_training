@@ -8,6 +8,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+import os
+
 from big_bertha.assets.big_bertha import BIG_BERTHA_CFG
 
 import isaaclab.envs.mdp as mdp
@@ -21,6 +23,14 @@ from isaaclab.sensors import ContactSensorCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
+
+# Curriculum sim rate, matched to the actuator picked in big_bertha.py via the
+# BB_ACTUATOR env var. Explicit IdealPD needs dt 1/500 (decimation 10) for
+# stability (kp*dt^2/I ~ 1.4, = gazebo's 500 Hz); implicit runs the native 1/200
+# (decimation 4), 2.5x faster. The policy stays 50 Hz either way (step_dt 0.02).
+_EXPLICIT = os.environ.get("BB_ACTUATOR", "implicit").lower() == "explicit"
+_SIM_DT = 1 / 500 if _EXPLICIT else 1 / 200
+_DECIMATION = 10 if _EXPLICIT else 4
 
 
 @configclass
@@ -82,10 +92,10 @@ class EventCfg:
 class BigberthaEnvCfg(DirectRLEnvCfg):
     # env
     episode_length_s = 20.0
-    # decimation 4 @ sim dt 1/200 -> policy at 50 Hz (step_dt 0.02). Native rate
-    # for the implicit actuator (the 1/500 sub-stepping was only needed for the
-    # explicit PD's stability).
-    decimation = 4
+    # decimation + sim dt switch with the actuator (BB_ACTUATOR, see above):
+    # implicit -> 4 @ 1/200 (native, 2.5x faster); explicit -> 10 @ 1/500 (PD
+    # stability, matches gazebo 500 Hz). Policy stays 50 Hz (step_dt 0.02) either.
+    decimation = _DECIMATION
     action_scale = 0.25
     action_noise_std = 0.05  # rad noise on joint targets (sim-to-sim actuator robustness)
     action_space = 12
@@ -94,8 +104,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
-        dt=1 / 200,
-        render_interval=4,
+        dt=_SIM_DT,
+        render_interval=_DECIMATION,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
@@ -121,7 +131,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     contact_sensor: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot/(base_link|arm_a_.*|arm_c_.*)",
         history_length=3,
-        update_period=0.005,  # Matches sim dt = 1/200
+        update_period=_SIM_DT,  # match sim dt (1/200 implicit, 1/500 explicit)
         track_air_time=True,
     )
 
@@ -149,8 +159,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     flat_orientation_reward_scale = -1.5  # Tilt penalty
     joint_activity_reward_scale = -0.01  # PENALTY on mean|joint_vel| (issue #35): discourage fast joint motion
     gait_pattern_reward_scale = 1.0  # Deprecated: replaced by feet_air_time and alternating_gait
-    feet_air_time_reward_scale = 1.0  # lift bootstrap; small so it isn't farmed in place (#46)
-    crawl_gait_reward_scale = 5.0  # one foot swings at a time (spider crawl pattern)
+    feet_air_time_reward_scale = 3.0  # lift bootstrap, raised (#46 follow-up: forward slide had ~0 lift, bring back real foot clearance)
+    crawl_gait_reward_scale = 8.0  # one foot swings at a time (spider crawl pattern), strengthened (#46 follow-up: enforce one-at-a-time pattern while moving)
     yaw_rate_reward_scale = 1.0  # bounded exp yaw tracking — secondary steering term
-    forward_progress_reward_scale = 15.0  # PRIMARY objective: real forward translation (#46)
+    forward_progress_reward_scale = 10.0  # PRIMARY objective: real forward translation (#46), reduced slightly (#46 follow-up) so lift/crawl terms can matter without losing dominance
     max_tilt_angle_deg = 40.0  # Reset threshold

@@ -7,11 +7,40 @@ The following configuration parameters are available:
 import os
 
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.actuators import IdealPDActuatorCfg, ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
 _USD_PATH = os.path.join(_REPO_ROOT, "assets", "usd", "big_bertha", "big_bertha.usd")
+
+# --- Curriculum actuator switch (no manual edits between phases) ------------
+# Set by the BB_ACTUATOR env var; big_bertha_env_cfg.py reads the same var to
+# pick the matching sim dt. Both model 12x TowerPro MG995 @6.6V: 1.18 N*m stall
+# (12 kgf*cm), 6.54 rad/s no-load (0.16 s/60deg).
+#   "implicit" (default, curriculum phase 1): PD solved in the physics engine ->
+#       leg-lifting is easy to discover, so the policy quickly learns to WALK
+#       FORWARD under the forward-gated reward (issue #46). Native dt 1/200.
+#   "explicit" (phase 2): IdealPD computing the same explicit effort-PD as
+#       gazebo's JointEffortPdController / the real MG995 motors
+#       (tau = clip(kp*(q_des-q) + kd*(0-qd), +/-effort_limit)); fine-tune the
+#       phase-1 walker on it for sim-to-real fidelity. Needs dt 1/500.
+_LEG_JOINTS = [f"Revolute_{_n}" for _n in range(110, 122)]
+if os.environ.get("BB_ACTUATOR", "implicit").lower() == "explicit":
+    _LEG_ACTUATOR = IdealPDActuatorCfg(
+        joint_names_expr=_LEG_JOINTS,
+        effort_limit=1.18,
+        velocity_limit=6.54,
+        stiffness=20.0,
+        damping=2.0,
+    )
+else:
+    _LEG_ACTUATOR = ImplicitActuatorCfg(
+        joint_names_expr=_LEG_JOINTS,
+        effort_limit_sim=1.18,
+        velocity_limit_sim=6.54,
+        stiffness=20.0,
+        damping=2.0,
+    )
 
 BIG_BERTHA_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
@@ -65,36 +94,5 @@ BIG_BERTHA_CFG = ArticulationCfg(
             "Revolute_121": 0.0,
         },
     ),
-    actuators={
-        # ImplicitActuatorCfg modeling 12x TowerPro MG995 servos @5V (the real
-        # supply): ~1.0 N*m stall (10.2 kgf*cm interp. 10@4.8V/12@6.6V) and
-        # 5.35 rad/s no-load (0.196 s/60deg interp. 0.20@4.8V/0.16@6.6V). The PD
-        # (stiffness/damping) is solved inside the physics engine. An explicit
-        # IdealPDActuatorCfg variant (matching gazebo's effort-PD) was tried to
-        # close the sim-to-sim gap, but it FROZE the crawl: at effort 1.0 the
-        # explicit PD cannot lift a leg (the kd*qd term drives the torque to the
-        # negative clamp during swing). We keep the implicit actuator, which
-        # crawls (feet_air_time ~0.45, crawl_gait ~4/5). Gazebo closes the gap by
-        # running its explicit effort-PD synchronously at 500 Hz instead.
-        "leg_joints": ImplicitActuatorCfg(
-            joint_names_expr=[
-                "Revolute_110",
-                "Revolute_111",
-                "Revolute_112",
-                "Revolute_113",
-                "Revolute_114",
-                "Revolute_115",
-                "Revolute_116",
-                "Revolute_117",
-                "Revolute_118",
-                "Revolute_119",
-                "Revolute_120",
-                "Revolute_121",
-            ],
-            effort_limit_sim=1.0,
-            velocity_limit_sim=5.35,
-            stiffness=20.0,
-            damping=2.0,
-        ),
-    },
+    actuators={"leg_joints": _LEG_ACTUATOR},
 )
