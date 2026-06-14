@@ -140,7 +140,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # modest steering term; joint_activity (which paid for raw joint speed ->
     # thrashing) is removed; gait shaping kept but below lin_vel so a trot serves
     # forward motion rather than the reverse.
-    lin_vel_reward_scale = 4.0  # bounded exp(-err^2) velocity tracking (crawl is slow)
+    lin_vel_reward_scale = 2.0  # exp velocity tracking; reduced (paid for standing, issue #46)
     z_vel_reward_scale = -0.25  # Vertical velocity penalty (relaxed to allow natural bounce)
     ang_vel_reward_scale = -0.05  # Roll/pitch rate penalty (stronger: damp spin/wobble)
     joint_torque_reward_scale = -1e-5  # Minimal torque penalty
@@ -149,8 +149,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     flat_orientation_reward_scale = -1.5  # Tilt penalty
     joint_activity_reward_scale = -0.01  # PENALTY on mean|joint_vel| (issue #35): discourage fast joint motion
     gait_pattern_reward_scale = 1.0  # Deprecated: replaced by feet_air_time and alternating_gait
-    feet_air_time_reward_scale = 2.5  # strong lift bootstrap (implicit-actuator diagnostic)
+    feet_air_time_reward_scale = 1.0  # lift bootstrap; small so it isn't farmed in place (#46)
     crawl_gait_reward_scale = 5.0  # one foot swings at a time (spider crawl pattern)
     yaw_rate_reward_scale = 1.0  # bounded exp yaw tracking — secondary steering term
-    forward_progress_reward_scale = 4.0  # STRONG linear fwd drive (break in-place crawling)
+    forward_progress_reward_scale = 15.0  # PRIMARY objective: real forward translation (#46)
     max_tilt_angle_deg = 40.0  # Reset threshold
