@@ -82,10 +82,10 @@ class EventCfg:
 class BigberthaEnvCfg(DirectRLEnvCfg):
     # env
     episode_length_s = 20.0
-    # decimation 10 @ sim dt 1/500 keeps the policy at 50 Hz (step_dt 0.02,
-    # unchanged) while sub-stepping the explicit PD actuator at 500 Hz where it
-    # is stable. (Was decimation 4 @ 1/200 for the implicit actuator.)
-    decimation = 10
+    # decimation 4 @ sim dt 1/200 -> policy at 50 Hz (step_dt 0.02). Native rate
+    # for the implicit actuator (the 1/500 sub-stepping was only needed for the
+    # explicit PD's stability).
+    decimation = 4
     action_scale = 0.25
     action_noise_std = 0.05  # rad noise on joint targets (sim-to-sim actuator robustness)
     action_space = 12
@@ -94,8 +94,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
-        dt=1 / 500,
-        render_interval=10,
+        dt=1 / 200,
+        render_interval=4,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
@@ -121,7 +121,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     contact_sensor: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot/(base_link|arm_a_.*|arm_c_.*)",
         history_length=3,
-        update_period=0.002,  # Matches sim dt = 1/500
+        update_period=0.005,  # Matches sim dt = 1/200
         track_air_time=True,
     )
 
@@ -149,7 +149,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     flat_orientation_reward_scale = -1.5  # Tilt penalty
     joint_activity_reward_scale = -0.01  # PENALTY on mean|joint_vel| (issue #35): discourage fast joint motion
     gait_pattern_reward_scale = 1.0  # Deprecated: replaced by feet_air_time and alternating_gait
-    feet_air_time_reward_scale = 0.5  # encourage all four legs to take a swing turn
+    feet_air_time_reward_scale = 2.5  # strong lift bootstrap (implicit-actuator diagnostic)
     crawl_gait_reward_scale = 5.0  # one foot swings at a time (spider crawl pattern)
     yaw_rate_reward_scale = 1.0  # bounded exp yaw tracking — secondary steering term
     forward_progress_reward_scale = 4.0  # STRONG linear fwd drive (break in-place crawling)

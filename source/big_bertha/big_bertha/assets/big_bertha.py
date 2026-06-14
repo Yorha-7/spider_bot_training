@@ -7,7 +7,7 @@ The following configuration parameters are available:
 import os
 
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import IdealPDActuatorCfg
+from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
@@ -66,16 +66,17 @@ BIG_BERTHA_CFG = ArticulationCfg(
         },
     ),
     actuators={
-        # EXPLICIT PD actuator (was ImplicitActuatorCfg). The deployed gazebo
-        # controller is a synchronous explicit effort-PD
-        # (tau = clip(kp*(q_des-q) + kd*(0-qd), +/-effort_limit)); training
-        # against Isaac's *implicit* (unconditionally stable) actuator left a
-        # sim-to-sim gap where the Isaac walk would not reproduce in gazebo.
-        # IdealPDActuator computes the identical explicit PD, so the policy now
-        # learns against the same actuator dynamics it is deployed on. Requires
-        # sim dt=1/500 for the explicit PD to be stable (kp*dt^2/I ~ 1.4), which
-        # also matches the gazebo controller_manager update_rate of 500 Hz.
-        "leg_joints": IdealPDActuatorCfg(
+        # ImplicitActuatorCfg modeling 12x TowerPro MG995 servos @5V (the real
+        # supply): ~1.0 N*m stall (10.2 kgf*cm interp. 10@4.8V/12@6.6V) and
+        # 5.35 rad/s no-load (0.196 s/60deg interp. 0.20@4.8V/0.16@6.6V). The PD
+        # (stiffness/damping) is solved inside the physics engine. An explicit
+        # IdealPDActuatorCfg variant (matching gazebo's effort-PD) was tried to
+        # close the sim-to-sim gap, but it FROZE the crawl: at effort 1.0 the
+        # explicit PD cannot lift a leg (the kd*qd term drives the torque to the
+        # negative clamp during swing). We keep the implicit actuator, which
+        # crawls (feet_air_time ~0.45, crawl_gait ~4/5). Gazebo closes the gap by
+        # running its explicit effort-PD synchronously at 500 Hz instead.
+        "leg_joints": ImplicitActuatorCfg(
             joint_names_expr=[
                 "Revolute_110",
                 "Revolute_111",
@@ -90,15 +91,8 @@ BIG_BERTHA_CFG = ArticulationCfg(
                 "Revolute_120",
                 "Revolute_121",
             ],
-            effort_limit=1.0,
-            # velocity_limit lowered 5.55 -> 4.0 rad/s to match the real MG995
-            # servos (issue #35: the policy drove its joints faster than the
-            # hardware can). The MG995 is rated ~0.17-0.20 s/60deg at 4.8-6V,
-            # i.e. 60deg / 0.20s = ~5.2 rad/s NO-LOAD; under the leg load it is
-            # appreciably slower, so 4.0 rad/s is a realistic in-service ceiling
-            # rather than the servo's unloaded top speed it can never hit on the
-            # robot.
-            velocity_limit=4.0,
+            effort_limit_sim=1.0,
+            velocity_limit_sim=5.35,
             stiffness=20.0,
             damping=2.0,
         ),
