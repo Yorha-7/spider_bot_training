@@ -52,6 +52,13 @@ class BigberthaEnv(DirectRLEnv):
         self._feet_ids, _ = self._contact_sensor.find_bodies(
             ["arm_c_1_1", "arm_c_2_1", "arm_c_3_1", "arm_c_4_1"], preserve_order=True
         )
+        # Articulation body indices for the SAME feet (body ordering can differ
+        # from the contact sensor), used to read world-frame foot height z for
+        # the swing-foot clearance reward. Same ordered name list => aligned with
+        # _feet_ids per-foot, which the clearance gate relies on.
+        self._feet_body_ids, _ = self._robot.find_bodies(
+            ["arm_c_1_1", "arm_c_2_1", "arm_c_3_1", "arm_c_4_1"], preserve_order=True
+        )
         self._die_body_ids, _ = self._contact_sensor.find_bodies(["arm_a_1_1", "arm_a_2_1", "arm_a_3_1", "arm_a_4_1"])
         # Diagonal foot pairs for the trot: {FR,RL}={0,2} swing together while
         # {FL,RR}={1,3} are in stance, then swap. (Was [[0,3],[1,2]] = same-side
@@ -74,6 +81,8 @@ class BigberthaEnv(DirectRLEnv):
                 "joint_activity",
                 "feet_air_time",
                 "crawl_gait",
+                "foot_clearance",
+                "multi_swing_pen",
                 "track_ang_vel_z_exp",
                 "forward_progress",
             ]
@@ -165,7 +174,7 @@ class BigberthaEnv(DirectRLEnv):
         fwd_vel = self._robot.data.root_lin_vel_b[:, 0]
         forward_progress = torch.where(
             self._commands[:, 0] > 0.05,
-            torch.clamp(fwd_vel, min=0.0, max=0.4),  # crawl is slow; don't pay for speed
+            torch.clamp(fwd_vel, min=0.0, max=0.12),  # deliberate creep: no "faster pays" above 0.12
             torch.zeros_like(fwd_vel),
         )
         # z velocity tracking
@@ -194,9 +203,7 @@ class BigberthaEnv(DirectRLEnv):
         # ~8x too weak vs crawl_gait and did nothing; hip-only at -9.0 competes.
         hip_ids = [0, 3, 6, 9]
         joint_deviation = torch.sum(
-            torch.square(
-                self._robot.data.joint_pos[:, hip_ids] - self._robot.data.default_joint_pos[:, hip_ids]
-            ),
+            torch.square(self._robot.data.joint_pos[:, hip_ids] - self._robot.data.default_joint_pos[:, hip_ids]),
             dim=1,
         )
 
@@ -219,27 +226,34 @@ class BigberthaEnv(DirectRLEnv):
 
         # A) Individual feet air time reward (allow longer lift for natural gait)
         feet_air_time = self._contact_sensor.data.current_air_time[:, self._feet_ids]
-        feet_air_time = torch.clamp(feet_air_time, max=1.0)
+        feet_air_time = torch.clamp(feet_air_time, max=1.5)  # slow deliberate swings last longer
         feet_air_time_reward = torch.mean(feet_air_time, dim=1)
 
         # B) Crawl / wave gait reward — spider-like single-leg sequence: exactly
         # ONE foot in a sustained swing at a time while the other three stay
-        # planted, cycling through all four legs. `lead_air` rewards the airborne
-        # foot for a REAL swing (clamped to 0.35 s) -- this kills the degenerate
-        # 1-timestep foot-flicks that an earlier (air_time > 1e-4) version let the
-        # policy game in place. `single` gates it to a single airborne foot, so a
-        # trot (2 up) or pronk (4 up) score ~0. n_swing only counts feet airborne
-        # >30 ms so micro-bounces of the planted feet don't break the gate.
+        # planted, cycling through all four legs. Sharpened for the reference
+        # deliberate wave: n_swing counts feet airborne >60 ms (kills 2-3 step
+        # micro-flicks); `single` is a near-BINARY gate (=1 only at exactly one
+        # swinging foot, 0 for 2+); lead_air pays a longer (0.45 s) deliberate
+        # swing; fwd_gate saturates within the new slow command (cap 0.12).
         feet_air_c = self._contact_sensor.data.current_air_time[:, self._feet_ids]
-        n_swing = (feet_air_c > 0.03).float().sum(dim=1)  # feet in a real swing
-        lead_air = torch.clamp(feet_air_c.max(dim=1).values, max=0.35) / 0.35  # 0..1
-        single = torch.exp(-torch.square(n_swing - 1.0) / 0.4)  # peak at exactly one
-        # GATE on forward motion (issue #46): the one-at-a-time pattern only pays
-        # when the body is actually TRANSLATING. Without this, the policy farmed
-        # crawl_gait by lifting feet one-at-a-time IN PLACE -- 99% of reward was
-        # earnable standing still. fwd_gate ramps 0->1 over fwd_vel 0..0.15 m/s.
-        fwd_gate = torch.clamp(fwd_vel / 0.15, 0.0, 1.0)
+        n_swing = (feet_air_c > 0.06).float().sum(dim=1)  # genuinely-sustained swings
+        lead_air = torch.clamp(feet_air_c.max(dim=1).values, max=0.45) / 0.45  # 0..1
+        single = (n_swing == 1.0).float()  # exactly one airborne foot (else 0)
+        fwd_gate = torch.clamp(fwd_vel / 0.10, 0.0, 1.0)
         crawl_gait_reward = lead_air * single * fwd_gate
+        # Hard penalty for 2+ feet airborne (trot/pronk) -> enforce the 3-foot
+        # support tripod (stance duty ~0.75) the reference crawl requires.
+        multi_swing_pen = torch.clamp(n_swing - 1.0, min=0.0)
+
+        # C) Swing-foot CLEARANCE — the missing HEIGHT signal. Air TIME alone
+        # rewarded a foot sliding 1 cm off the ground identically to a 4 cm step,
+        # giving the fast low-lift shuffle (measured air_time 0.056 s). Reward
+        # each AIRBORNE foot (gated on air>0.06 s, so a planted/sliding foot pays
+        # zero) for its world-frame height reaching a ~0.045 m clear lift.
+        feet_z = self._robot.data.body_pos_w[:, self._feet_body_ids, 2]  # (N,4) world z
+        swinging = (feet_air_c > 0.06).float()
+        foot_clearance_reward = torch.sum(torch.exp(-torch.square((feet_z - 0.045) / 0.03)) * swinging, dim=1)
 
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_reward * self.cfg.lin_vel_reward_scale * self.step_dt,
@@ -254,6 +268,8 @@ class BigberthaEnv(DirectRLEnv):
             "joint_activity": joint_activity * self.cfg.joint_activity_reward_scale * self.step_dt,
             "feet_air_time": feet_air_time_reward * self.cfg.feet_air_time_reward_scale * self.step_dt,
             "crawl_gait": crawl_gait_reward * self.cfg.crawl_gait_reward_scale * self.step_dt,
+            "foot_clearance": foot_clearance_reward * self.cfg.foot_clearance_reward_scale * self.step_dt,
+            "multi_swing_pen": multi_swing_pen * self.cfg.multi_swing_penalty_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_reward * self.cfg.yaw_rate_reward_scale * self.step_dt,
             "forward_progress": forward_progress * self.cfg.forward_progress_reward_scale * self.step_dt,
         }
@@ -297,9 +313,14 @@ class BigberthaEnv(DirectRLEnv):
         # 0.4 m/s, so commanding it only taught the policy to move too fast for
         # its own good. 0.3 m/s still brackets the 0.3 m/s demo command while
         # staying inside what the hardware can actually deliver.
-        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.1, 0.3)
+        # Slow deliberate creep (was 0.1-0.3): the reference crawl is a slow wave,
+        # and capping forward_progress at 0.12 needs the command in that range.
+        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.05, 0.12)
         self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.05, 0.05)
-        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.15, 0.15)
+        # WIDER yaw (was +/-0.15): teach real left/right rotation for obstacle
+        # avoidance so the policy can execute Nav2's ~0.44 rad/s turns directly
+        # (removes the policy-node yaw clamp workaround).
+        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.6, 0.6)
         # If a fixed-command override is active, replace the freshly sampled
         # random commands for the reset envs with the user's fixed values. This
         # runs BEFORE _get_observations, so the policy never sees a stray random

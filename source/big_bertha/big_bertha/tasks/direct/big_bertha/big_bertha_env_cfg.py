@@ -186,12 +186,24 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     joint_accel_reward_scale = -1e-7  # Minimal acceleration penalty
     action_rate_reward_scale = -0.01  # Action smoothness (stronger for a cleaner gait)
     flat_orientation_reward_scale = -1.5  # Tilt penalty
-    joint_deviation_reward_scale = -9.0  # anti-sprawl on HIP joints only (idx 0,3,6,9); -1.0 full-joint was ~8x too weak vs crawl_gait and did nothing
-    base_height_reward_scale = 2.0  # hold body near 0.09 m standing height; counters the Gazebo sink->pronk (no height term existed before)
+    joint_deviation_reward_scale = (
+        -9.0
+    )  # anti-sprawl on HIP joints only (idx 0,3,6,9); -1.0 full-joint was ~8x too weak vs crawl_gait and did nothing
+    base_height_reward_scale = (
+        2.0  # hold body near 0.09 m standing height; counters the Gazebo sink->pronk (no height term existed before)
+    )
     joint_activity_reward_scale = -0.01  # PENALTY on mean|joint_vel| (issue #35): discourage fast joint motion
     gait_pattern_reward_scale = 1.0  # Deprecated: replaced by feet_air_time and alternating_gait
-    feet_air_time_reward_scale = 3.0  # lift bootstrap, raised (#46 follow-up: forward slide had ~0 lift, bring back real foot clearance)
-    crawl_gait_reward_scale = 8.0  # one foot swings at a time (spider crawl pattern), strengthened (#46 follow-up: enforce one-at-a-time pattern while moving)
-    yaw_rate_reward_scale = 1.0  # bounded exp yaw tracking — secondary steering term
-    forward_progress_reward_scale = 10.0  # PRIMARY objective: real forward translation (#46), reduced slightly (#46 follow-up) so lift/crawl terms can matter without losing dominance
+    feet_air_time_reward_scale = (
+        3.0  # lift bootstrap, raised (#46 follow-up: forward slide had ~0 lift, bring back real foot clearance)
+    )
+    crawl_gait_reward_scale = 8.0  # one foot swings at a time (spider crawl); #46: enforce one-at-a-time pattern
+    foot_clearance_reward_scale = 6.0  # reference crawl: reward airborne foot reaching ~0.045 m clearance
+    multi_swing_penalty_scale = -2.0  # penalize 2+ feet airborne (trot/pronk) -> enforce 3-foot support tripod
+    yaw_rate_reward_scale = (
+        2.0  # strengthened (1->2) so the policy learns wider left/right rotation for obstacle avoidance
+    )
+    forward_progress_reward_scale = (
+        4.0  # reduced 10->4 + cap 0.12: stop the "faster always pays" gradient so the gait creeps deliberately
+    )
     max_tilt_angle_deg = 40.0  # Reset threshold
