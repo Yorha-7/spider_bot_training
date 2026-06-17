@@ -51,9 +51,9 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.6, 1.4),
-            "dynamic_friction_range": (0.4, 1.1),
-            "restitution_range": (0.0, 0.1),
+            "static_friction_range": (0.5, 1.6),
+            "dynamic_friction_range": (0.35, 1.3),
+            "restitution_range": (0.0, 0.25),
             "num_buckets": 64,
         },
     )
@@ -84,6 +84,35 @@ class EventCfg:
                 "pitch": (-0.5, 0.5),
                 "yaw": (-0.4, 0.4),
             }
+        },
+    )
+    # ACTUATOR-strength randomization (the key missing DR for the sim-to-sim gap):
+    # the policy overfit to ONE exact kp/kd, so in Gazebo/DART -- where the realized
+    # actuator is effectively softer/laggier -- the stance gives way and it pronks +
+    # sinks. Re-sample kp x[0.7,1.3] (14..26) and kd x[0.5,2.0] (1..4) per episode so
+    # the gait must hold across a RANGE of actuator response (DART's lands inside it).
+    actuator_gains = EventTerm(
+        func=mdp.randomize_actuator_gains,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_.*"),
+            "stiffness_distribution_params": (0.6, 1.4),
+            "damping_distribution_params": (0.5, 2.0),
+            "operation": "scale",
+            "distribution": "log_uniform",
+        },
+    )
+    # Joint Coulomb friction + armature randomization: the Gazebo URDF joints carry
+    # drag (damping/inertia) the ideal Isaac joint never had. Train across a range so
+    # the realized joint drag in DART is in-distribution.
+    joint_props = EventTerm(
+        func=mdp.randomize_joint_parameters,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_.*"),
+            "friction_distribution_params": (0.0, 0.05),
+            "armature_distribution_params": (0.0, 0.01),
+            "operation": "add",
         },
     )
 
@@ -157,6 +186,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     joint_accel_reward_scale = -1e-7  # Minimal acceleration penalty
     action_rate_reward_scale = -0.01  # Action smoothness (stronger for a cleaner gait)
     flat_orientation_reward_scale = -1.5  # Tilt penalty
+    joint_deviation_reward_scale = -9.0  # anti-sprawl on HIP joints only (idx 0,3,6,9); -1.0 full-joint was ~8x too weak vs crawl_gait and did nothing
+    base_height_reward_scale = 2.0  # hold body near 0.09 m standing height; counters the Gazebo sink->pronk (no height term existed before)
     joint_activity_reward_scale = -0.01  # PENALTY on mean|joint_vel| (issue #35): discourage fast joint motion
     gait_pattern_reward_scale = 1.0  # Deprecated: replaced by feet_air_time and alternating_gait
     feet_air_time_reward_scale = 3.0  # lift bootstrap, raised (#46 follow-up: forward slide had ~0 lift, bring back real foot clearance)
