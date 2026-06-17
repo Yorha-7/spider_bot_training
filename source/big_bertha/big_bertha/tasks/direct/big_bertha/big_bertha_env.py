@@ -69,6 +69,8 @@ class BigberthaEnv(DirectRLEnv):
                 "dof_acc_l2",
                 "action_rate_l2",
                 "flat_orientation_l2",
+                "joint_deviation",
+                "base_height",
                 "joint_activity",
                 "feet_air_time",
                 "crawl_gait",
@@ -184,6 +186,32 @@ class BigberthaEnv(DirectRLEnv):
         # flat orientation
         flat_orientation = torch.sum(torch.square(self._robot.data.projected_gravity_b[:, :2]), dim=1)
 
+        # Anti-sprawl posture: keep the HIP joints near the compact default pose.
+        # The explicit fine-tune drifted into a WIDE splayed stance (sum(dev^2)
+        # ~0.41 vs the compact implicit gait's ~0.20). 62% of that sprawl energy
+        # is in the four hip joints (idx 0,3,6,9), so penalize only those (leaving
+        # thigh/knee freedom the swing needs). A full-12-joint penalty at -1.0 was
+        # ~8x too weak vs crawl_gait and did nothing; hip-only at -9.0 competes.
+        hip_ids = [0, 3, 6, 9]
+        joint_deviation = torch.sum(
+            torch.square(
+                self._robot.data.joint_pos[:, hip_ids] - self._robot.data.default_joint_pos[:, hip_ids]
+            ),
+            dim=1,
+        )
+
+        # Base-height maintenance: hold the body near the Isaac standing height
+        # (~0.09 m). There was NO height term before, so nothing stopped the
+        # Gazebo sink (0.094 -> 0.063 m) that collapses the stance into a pronk.
+        # Peaked reward (~0.94 at the steady 0.085 m, so it doesn't distort the
+        # working gait) that pays the policy to keep the stance legs extended.
+        base_height = self._robot.data.root_pos_w[:, 2]
+        # Wider sigma (0.035) so a range of standing heights is in-distribution:
+        # in Gazebo the body settles lower (DART contact), and a too-peaky term
+        # made z<0.06 fully out-of-distribution -> the policy pronked. Tolerate
+        # 0.06-0.12 while still peaking at the 0.09 Isaac standing height.
+        base_height_reward = torch.exp(-torch.square((base_height - 0.09) / 0.035))
+
         # Joint activity reward - encourage using all joints
         joint_vel_magnitude = torch.sum(torch.abs(self._robot.data.joint_vel), dim=1)
         num_joints = self._robot.data.joint_pos.shape[1]
@@ -221,6 +249,8 @@ class BigberthaEnv(DirectRLEnv):
             "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
             "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
             "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
+            "joint_deviation": joint_deviation * self.cfg.joint_deviation_reward_scale * self.step_dt,
+            "base_height": base_height_reward * self.cfg.base_height_reward_scale * self.step_dt,
             "joint_activity": joint_activity * self.cfg.joint_activity_reward_scale * self.step_dt,
             "feet_air_time": feet_air_time_reward * self.cfg.feet_air_time_reward_scale * self.step_dt,
             "crawl_gait": crawl_gait_reward * self.cfg.crawl_gait_reward_scale * self.step_dt,
@@ -240,6 +270,10 @@ class BigberthaEnv(DirectRLEnv):
         died = torch.any(
             torch.max(torch.norm(net_contact_forces[:, :, self._die_body_ids], dim=-1), dim=1)[0] > 50.0, dim=1
         )
+        # Collapse termination: if the body sinks below 0.06 m it has given way
+        # (spawn z=0.1, steady ~0.085-0.09 are well above), making the sink that
+        # degrades the Gazebo gait into a pronk strictly costly.
+        died = died | (self._robot.data.root_pos_w[:, 2] < 0.05)
         return died, time_out
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
