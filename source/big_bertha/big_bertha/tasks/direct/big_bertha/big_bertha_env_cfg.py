@@ -193,7 +193,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
         2.0  # hold body near 0.09 m standing height; counters the Gazebo sink->pronk (no height term existed before)
     )
     joint_activity_reward_scale = -0.01  # PENALTY on mean|joint_vel| (issue #35): discourage fast joint motion
-    gait_pattern_reward_scale = 1.0  # Deprecated: replaced by feet_air_time and alternating_gait
+    gait_pattern_reward_scale = 2.0  # Deprecated: replaced by feet_air_time and alternating_gait
     feet_air_time_reward_scale = (
         3.0  # lift bootstrap, raised (#46 follow-up: forward slide had ~0 lift, bring back real foot clearance)
     )
