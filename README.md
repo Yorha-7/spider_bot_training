@@ -175,6 +175,25 @@ python scripts/rsl_rl/play_teleop.py --task spider_3
 | `yaw_rate` | 3.0 | Track target turning |
 | `alternating_gait` | 4.0 | Trot coordination |
 
+### Physical Params
+| Joint | lower limit | upper_limit | off | channel |
+|-----|-----|-----|-----|-----|
+| FL_hip_joint | 180 | 50 | 0 | 2 |
+| FL_thigh_joint | 50 | 180 | +10 | 1 |
+| FL_calf_joint | 150 | 0 | +2 | 0 |
+|
+| FR_hip_joint | 30 | 150 | 0 | 10 |
+| FR_thigh_joint | 140 | 180 | 0 | 9 |
+| FR_calf_joint | 40 | 180 | +8 | 8 |
+| (Yet to be calculated) |
+| RL_hip_joint | 0 | 0 | 0 | 0 |
+| RL_thigh_joint | 0 | 0 | 0 | 0 |
+| RL_calf_joint | 0 | 0 | 0 | 0 |
+| RR_hip_joint | 0 | 0 | 0 | 0 |
+| RR_thigh_joint | 0 | 0 | 0 | 0 |
+| RR_calf_joint | 0 | 0 | 0 | 0 |
+
+
 ## Development
 
 ```bash
