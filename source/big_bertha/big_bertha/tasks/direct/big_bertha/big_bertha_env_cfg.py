@@ -51,8 +51,14 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.5, 1.6),
-            "dynamic_friction_range": (0.35, 1.3),
+            # Wider PER-BODY friction range so each leg sees an independently
+            # sampled contact (left/right asymmetry up to ~4x). DART's contact
+            # solver gives Big Bertha a systematic right drift/lateral slip; a
+            # policy trained across large per-leg friction asymmetry must learn
+            # to walk straight under any such imbalance instead of memorising
+            # Isaac's symmetric contact (which slipped sideways in Gazebo).
+            "static_friction_range": (0.4, 1.8),
+            "dynamic_friction_range": (0.3, 1.5),
             "restitution_range": (0.0, 0.25),
             "num_buckets": 64,
         },
@@ -203,6 +209,19 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     yaw_rate_reward_scale = (
         2.0  # strengthened (1->2) so the policy learns wider left/right rotation for obstacle avoidance
     )
+    # LINEAR yaw-progress reward (the turn enabler). The exp yaw term above is
+    # flat at large errors: turning 0 -> 0.05 rad/s barely raises it while it
+    # costs the gait, so the policy never commits to turning (measured ~0.05
+    # rad/s at cmd 0.5 in Gazebo -> Nav2 cannot steer). This term pays LINEARLY
+    # for yaw rate achieved in the commanded direction (capped at |cmd|), giving
+    # a non-saturating gradient to actually turn -- the same trick that broke the
+    # shuffle-in-place optimum for forward_progress.
+    yaw_progress_reward_scale = 2.0
+    # Anti-drift: when commanded ~straight (|cmd_yaw|<0.1) penalize any yaw rate,
+    # so the policy holds heading instead of curving (kills the systematic
+    # right-drift at the source rather than relying on the deployment heading
+    # controller alone).
+    yaw_straight_penalty_scale = -1.0
     forward_progress_reward_scale = (
         4.0  # reduced 10->4 + cap 0.12: stop the "faster always pays" gradient so the gait creeps deliberately
     )

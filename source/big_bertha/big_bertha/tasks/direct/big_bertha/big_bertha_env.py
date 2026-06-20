@@ -84,6 +84,8 @@ class BigberthaEnv(DirectRLEnv):
                 "foot_clearance",
                 "multi_swing_pen",
                 "track_ang_vel_z_exp",
+                "yaw_progress",
+                "yaw_straight_pen",
                 "forward_progress",
             ]
         }
@@ -186,6 +188,22 @@ class BigberthaEnv(DirectRLEnv):
         # made spinning the dominant reward).
         yaw_rate_error = torch.square(self._commands[:, 2] - self._robot.data.root_ang_vel_b[:, 2])
         yaw_reward = torch.exp(-yaw_rate_error / 0.1)
+        # LINEAR yaw-progress: reward yaw rate achieved in the COMMANDED
+        # direction, capped at |cmd|, with no saturation -- so turning always
+        # beats not turning (the exp term above is flat at large error and gave
+        # the policy no reason to commit to a turn). Gated on a real yaw command.
+        cmd_yaw = self._commands[:, 2]
+        ach_yaw = self._robot.data.root_ang_vel_b[:, 2]
+        yaw_progress = torch.where(
+            torch.abs(cmd_yaw) > 0.1,
+            torch.clamp(ach_yaw * torch.sign(cmd_yaw), min=0.0),
+            torch.zeros_like(cmd_yaw),
+        )
+        yaw_progress = torch.minimum(yaw_progress, torch.abs(cmd_yaw))
+        # Anti-drift: when commanded ~straight, penalize any yaw rate so the gait
+        # holds heading (counters the DART right-drift at the policy level).
+        straight_gate = (torch.abs(cmd_yaw) < 0.1).float()
+        yaw_straight_pen = torch.square(ach_yaw) * straight_gate
         # joint torques
         joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
         # joint acceleration
@@ -271,6 +289,8 @@ class BigberthaEnv(DirectRLEnv):
             "foot_clearance": foot_clearance_reward * self.cfg.foot_clearance_reward_scale * self.step_dt,
             "multi_swing_pen": multi_swing_pen * self.cfg.multi_swing_penalty_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_reward * self.cfg.yaw_rate_reward_scale * self.step_dt,
+            "yaw_progress": yaw_progress * self.cfg.yaw_progress_reward_scale * self.step_dt,
+            "yaw_straight_pen": yaw_straight_pen * self.cfg.yaw_straight_penalty_scale * self.step_dt,
             "forward_progress": forward_progress * self.cfg.forward_progress_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
@@ -315,7 +335,11 @@ class BigberthaEnv(DirectRLEnv):
         # staying inside what the hardware can actually deliver.
         # Slow deliberate creep (was 0.1-0.3): the reference crawl is a slow wave,
         # and capping forward_progress at 0.12 needs the command in that range.
-        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.05, 0.12)
+        # Low end lowered 0.05 -> 0.0 so some envs are commanded near-stationary:
+        # the policy learns to STAND (and turn in place when yaw is commanded)
+        # instead of always creeping forward -- this also fixes the deployment
+        # quirk where vx=0 was out-of-distribution and the robot walked anyway.
+        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.0, 0.12)
         self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.05, 0.05)
         # WIDER yaw (was +/-0.15): teach real left/right rotation for obstacle
         # avoidance so the policy can execute Nav2's ~0.44 rad/s turns directly
