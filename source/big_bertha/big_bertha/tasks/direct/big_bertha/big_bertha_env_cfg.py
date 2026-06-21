@@ -15,7 +15,7 @@ from big_bertha.assets.big_bertha import BIG_BERTHA_CFG
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg
-from isaaclab.envs import DirectRLEnvCfg
+from isaaclab.envs import DirectRLEnvCfg, ViewerCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.scene import InteractiveSceneCfg
@@ -141,8 +141,13 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # authority to walk straight against it (which a velocity penalty alone, with
     # no such disturbance in PhysX, could not teach). Robot is ~3-6 kg, so a few N
     # is gentle-moderate. Set 0.0 to disable.
-    lateral_bias_force = 2.0  # N, max |constant body-y push|
-    yaw_bias_torque = 0.3  # N*m, max |constant body-z (yaw) torque|
+    # Raised 4.0 -> 6.0 N: 4 N cut the lateral crab ~60% (straight-demo perp drift
+    # -0.40 -> -0.16 m) but a residual south crab still pinned the robot on the
+    # wall in nav, so deployment cross-track steering alone reached B only
+    # stochastically. 6 N pushes the policy to develop more lateral-holding
+    # authority so the residual DART crab is smaller and reliably steerable to B.
+    lateral_bias_force = 6.0  # N, max |constant body-y push|
+    yaw_bias_torque = 0.4  # N*m, max |constant body-z (yaw) torque|
     action_space = 12
     observation_space = 48
     state_space = 0
@@ -188,6 +193,18 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
 
     # robot
     robot: ArticulationCfg = BIG_BERTHA_CFG.replace(prim_path="/World/envs/env_.*/Robot")
+
+    # Close follow-camera for the 1-env play.py --video walking GIF (zoomed in on
+    # the robot). origin_type="asset_root" locks it onto the robot so it tracks
+    # the gait; eye is the camera offset (m) and lookat the target. Headless
+    # training never renders, so this has zero effect on training.
+    viewer: ViewerCfg = ViewerCfg(
+        eye=(1.4, 1.4, 0.8),
+        lookat=(0.0, 0.0, 0.12),
+        origin_type="asset_root",
+        asset_name="robot",
+        resolution=(1280, 720),
+    )
 
     # reward scales - REBALANCED so forward translation dominates. The previous
     # set let a spinning/flailing policy out-score a walker (yaw tracking blew up
@@ -236,7 +253,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # body-y velocity, the lateral analogue of yaw_straight_penalty. This is the
     # direct cure for the systematic PhysX->DART sideways/right drift seen in
     # demo_straight -- it makes a steady sideways slip clearly sub-optimal.
-    lat_straight_penalty_scale = -2.0
+    lat_straight_penalty_scale = -6.0  # -4->-6 with the 6 N bias: penalize residual body-y velocity harder still
     forward_progress_reward_scale = (
         4.0  # reduced 10->4 + cap 0.12: stop the "faster always pays" gradient so the gait creeps deliberately
     )
