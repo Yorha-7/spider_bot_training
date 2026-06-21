@@ -133,6 +133,16 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     decimation = _DECIMATION
     action_scale = 0.25
     action_noise_std = 0.05  # rad noise on joint targets (sim-to-sim actuator robustness)
+    # SUSTAINED lateral-bias DR (sim-to-sim crab fix): a constant body-frame
+    # sideways force + yaw torque, randomized per-episode in [-v, v] and held for
+    # the whole episode (applied in big_bertha_env._pre_physics_step). Unlike the
+    # impulsive push_robot, this is a STEADY directional disturbance -- the model
+    # of DART's gait-induced crab -- so the policy must learn the lateral+yaw
+    # authority to walk straight against it (which a velocity penalty alone, with
+    # no such disturbance in PhysX, could not teach). Robot is ~3-6 kg, so a few N
+    # is gentle-moderate. Set 0.0 to disable.
+    lateral_bias_force = 2.0  # N, max |constant body-y push|
+    yaw_bias_torque = 0.3  # N*m, max |constant body-z (yaw) torque|
     action_space = 12
     observation_space = 48
     state_space = 0
@@ -222,6 +232,11 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # right-drift at the source rather than relying on the deployment heading
     # controller alone).
     yaw_straight_penalty_scale = -1.0
+    # Anti-crab: when commanded ~straight laterally (|cmd_vy|<0.02) penalize
+    # body-y velocity, the lateral analogue of yaw_straight_penalty. This is the
+    # direct cure for the systematic PhysX->DART sideways/right drift seen in
+    # demo_straight -- it makes a steady sideways slip clearly sub-optimal.
+    lat_straight_penalty_scale = -2.0
     forward_progress_reward_scale = (
         4.0  # reduced 10->4 + cap 0.12: stop the "faster always pays" gradient so the gait creeps deliberately
     )

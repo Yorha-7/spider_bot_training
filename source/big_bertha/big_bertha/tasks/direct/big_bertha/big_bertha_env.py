@@ -60,6 +60,18 @@ class BigberthaEnv(DirectRLEnv):
             ["arm_c_1_1", "arm_c_2_1", "arm_c_3_1", "arm_c_4_1"], preserve_order=True
         )
         self._die_body_ids, _ = self._contact_sensor.find_bodies(["arm_a_1_1", "arm_a_2_1", "arm_a_3_1", "arm_a_4_1"])
+        # Articulation base index + buffers for the SUSTAINED lateral-bias DR: a
+        # constant body-frame sideways force + yaw torque held for the whole
+        # episode (set_external_force_and_torque applies in the LOCAL link frame,
+        # is_global=False). This is the systematic disturbance a pure velocity
+        # penalty could not supply -- the policy must actively walk straight
+        # against a DART-like crab/yaw push, building the lateral+yaw authority
+        # that transfers. Magnitudes sampled per-episode in _reset_idx.
+        self._robot_base_id, _ = self._robot.find_bodies("base_link")
+        self._lat_bias = torch.zeros(self.num_envs, device=self.device)
+        self._yaw_bias = torch.zeros(self.num_envs, device=self.device)
+        self._ext_force = torch.zeros(self.num_envs, 1, 3, device=self.device)
+        self._ext_torque = torch.zeros(self.num_envs, 1, 3, device=self.device)
         # Diagonal foot pairs for the trot: {FR,RL}={0,2} swing together while
         # {FL,RR}={1,3} are in stance, then swap. (Was [[0,3],[1,2]] = same-side
         # legs, which let the policy satisfy the gait reward with a pronk.)
@@ -86,6 +98,7 @@ class BigberthaEnv(DirectRLEnv):
                 "track_ang_vel_z_exp",
                 "yaw_progress",
                 "yaw_straight_pen",
+                "lat_straight_pen",
                 "forward_progress",
             ]
         }
@@ -120,6 +133,13 @@ class BigberthaEnv(DirectRLEnv):
             self._processed_actions = self._processed_actions + (
                 torch.randn_like(self._processed_actions) * self.cfg.action_noise_std
             )
+        # Hold the per-episode sustained bias: body-y force (lateral crab) + body-z
+        # torque (yaw drift), re-applied every control step (is_global=False ->
+        # local link frame, so it stays body-relative).
+        if self.cfg.lateral_bias_force > 0.0 or self.cfg.yaw_bias_torque > 0.0:
+            self._ext_force[:, 0, 1] = self._lat_bias
+            self._ext_torque[:, 0, 2] = self._yaw_bias
+            self._robot.set_external_force_and_torque(self._ext_force, self._ext_torque, body_ids=self._robot_base_id)
 
     def _apply_action(self):
         self._robot.set_joint_position_target(self._processed_actions)
@@ -204,6 +224,13 @@ class BigberthaEnv(DirectRLEnv):
         # holds heading (counters the DART right-drift at the policy level).
         straight_gate = (torch.abs(cmd_yaw) < 0.1).float()
         yaw_straight_pen = torch.square(ach_yaw) * straight_gate
+        # Anti-crab: when commanded ~straight laterally (|cmd_vy| ~ 0), penalize
+        # body-frame y velocity so the gait holds its LINE. This is the lateral
+        # analogue of yaw_straight_pen and is the direct cure for the systematic
+        # PhysX->DART sideways/right drift -- the soft exp lin_vel tracking does
+        # not punish a steady slip hard enough.
+        lat_straight_gate = (torch.abs(self._commands[:, 1]) < 0.02).float()
+        lat_straight_pen = torch.square(self._robot.data.root_lin_vel_b[:, 1]) * lat_straight_gate
         # joint torques
         joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
         # joint acceleration
@@ -291,6 +318,7 @@ class BigberthaEnv(DirectRLEnv):
             "track_ang_vel_z_exp": yaw_reward * self.cfg.yaw_rate_reward_scale * self.step_dt,
             "yaw_progress": yaw_progress * self.cfg.yaw_progress_reward_scale * self.step_dt,
             "yaw_straight_pen": yaw_straight_pen * self.cfg.yaw_straight_penalty_scale * self.step_dt,
+            "lat_straight_pen": lat_straight_pen * self.cfg.lat_straight_penalty_scale * self.step_dt,
             "forward_progress": forward_progress * self.cfg.forward_progress_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
@@ -345,6 +373,18 @@ class BigberthaEnv(DirectRLEnv):
         # avoidance so the policy can execute Nav2's ~0.44 rad/s turns directly
         # (removes the policy-node yaw clamp workaround).
         self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.6, 0.6)
+        # Sample the per-episode SUSTAINED bias disturbance (sim-to-sim crab DR):
+        # a constant body-frame lateral force + yaw torque held for the episode,
+        # so the policy learns to actively hold its line/heading against a
+        # DART-like directional push (the missing DR behind the residual drift).
+        if self.cfg.lateral_bias_force > 0.0:
+            self._lat_bias[env_ids] = torch.empty(len(env_ids), device=self.device).uniform_(
+                -self.cfg.lateral_bias_force, self.cfg.lateral_bias_force
+            )
+        if self.cfg.yaw_bias_torque > 0.0:
+            self._yaw_bias[env_ids] = torch.empty(len(env_ids), device=self.device).uniform_(
+                -self.cfg.yaw_bias_torque, self.cfg.yaw_bias_torque
+            )
         # If a fixed-command override is active, replace the freshly sampled
         # random commands for the reset envs with the user's fixed values. This
         # runs BEFORE _get_observations, so the policy never sees a stray random
