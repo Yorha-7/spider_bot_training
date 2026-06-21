@@ -97,13 +97,38 @@ class EventCfg:
     # ACTUATOR-strength randomization (the key missing DR for the sim-to-sim gap):
     # the policy overfit to ONE exact kp/kd, so in Gazebo/DART -- where the realized
     # actuator is effectively softer/laggier -- the stance gives way and it pronks +
-    # sinks. Re-sample kp x[0.7,1.3] (14..26) and kd x[0.5,2.0] (1..4) per episode so
-    # the gait must hold across a RANGE of actuator response (DART's lands inside it).
-    actuator_gains = EventTerm(
+    # sinks. Re-sample kp x[0.7,1.3] and kd x[0.5,2.0] per episode so the gait must
+    # hold across a RANGE of actuator response (DART's lands inside it).
+    # Split into per-joint-group so each group's base kd (tuned to its reflected
+    # inertia: HIP 0.19, THIGH 0.13, CALF 0.08 with kp=5) gets its own DR while
+    # the scale distribution stays the same.
+    actuator_gains_hip = EventTerm(
         func=mdp.randomize_actuator_gains,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_.*"),
+            "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_(110|113|116|119)"),
+            "stiffness_distribution_params": (0.6, 1.4),
+            "damping_distribution_params": (0.5, 2.0),
+            "operation": "scale",
+            "distribution": "log_uniform",
+        },
+    )
+    actuator_gains_thigh = EventTerm(
+        func=mdp.randomize_actuator_gains,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_(111|114|117|120)"),
+            "stiffness_distribution_params": (0.6, 1.4),
+            "damping_distribution_params": (0.5, 2.0),
+            "operation": "scale",
+            "distribution": "log_uniform",
+        },
+    )
+    actuator_gains_calf = EventTerm(
+        func=mdp.randomize_actuator_gains,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_(112|115|118|121)"),
             "stiffness_distribution_params": (0.6, 1.4),
             "damping_distribution_params": (0.5, 2.0),
             "operation": "scale",
