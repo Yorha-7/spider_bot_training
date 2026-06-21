@@ -1,186 +1,189 @@
 <?xml version='1.0' encoding='utf-8'?>
 <robot name="SpdrBot">
+<material name="silver">
+  <color rgba="0.700 0.700 0.700 1.000"/>
+</material>
   <link name="base_link">
     <visual>
       <origin xyz="0 -0.015 0" rpy="1.57 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Central perforated plate.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Central_perforated_plate.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0 -0.015 0" rpy="1.57 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Central perforated plate.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Central_perforated_plate.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0 0.015 0" rpy="1.57 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Central perforated plate.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Central_perforated_plate.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0 0.015 0" rpy="1.57 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Central perforated plate.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Central_perforated_plate.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.001 0.01 0.061" rpy="1.57 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.001 0.01 0.061" rpy="1.57 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.069 0.01 0.001" rpy="1.57 -1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.069 0.01 0.001" rpy="1.57 -1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.127 0.01 0.069" rpy="1.57 3.14 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.127 0.01 0.069" rpy="1.57 3.14 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.068 0.01 0.127" rpy="1.57 1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.068 0.01 0.127" rpy="1.57 1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.0325 -0.02 -0.007" rpy="1.57 -1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate bottom.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_bottom.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.0325 -0.02 -0.007" rpy="1.57 -1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate bottom.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_bottom.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.137 -0.02 0.032" rpy="1.57 3.14 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate bottom.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_bottom.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.137 -0.02 0.032" rpy="1.57 3.14 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate bottom.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_bottom.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="-0.007 -0.02 0.098" rpy="1.57 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate bottom.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_bottom.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="-0.007 -0.02 0.098" rpy="1.57 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate bottom.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_bottom.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.097 -0.02 0.137" rpy="1.57 1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate bottom.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_bottom.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.097 -0.02 0.137" rpy="1.57 1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate bottom.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_bottom.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.155 0.01 0.078" rpy="1.57 -1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate top.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_top.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.155 0.01 0.078" rpy="1.57 -1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate top.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_top.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.052 0.01 0.155" rpy="1.57 -3.14 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate top.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_top.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.052 0.01 0.155" rpy="1.57 -3.14 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate top.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_top.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.078 0.01 -0.025" rpy="1.57 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate top.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_top.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.078 0.01 -0.025" rpy="1.57 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate top.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_top.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="-0.025 0.01 0.052" rpy="1.57 1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate top.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_top.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="-0.025 0.01 0.052" rpy="1.57 1.57 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm perforated plate top.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_perforated_plate_top.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -245,14 +248,14 @@
     <visual>
       <origin xyz="0.025 0.012 0.008" rpy="3.14 0 -1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm A Right.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_A_Right.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.025 0.012 0.008" rpy="3.14 0 -1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm A Right.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_A_Right.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -278,14 +281,14 @@
     <visual>
       <origin xyz="0.012 0.012 0.01" rpy="3.14 0 -1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm A Left.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_A_Left.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.012 0.012 0.01" rpy="3.14 0 -1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm A Left.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_A_Left.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -311,14 +314,14 @@
     <visual>
       <origin xyz="0.026 0.012 0.01" rpy="3.14 0 -1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm A Right.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_A_Right.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.026 0.012 0.01" rpy="3.14 0 -1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm A Right.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_A_Right.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -344,14 +347,14 @@
     <visual>
       <origin xyz="0.012 0.012 0.01" rpy="3.14 0 -1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm A Left.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_A_Left.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.012 0.012 0.01" rpy="3.14 0 -1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm A Left.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_A_Left.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -377,14 +380,14 @@
     <visual>
       <origin xyz="0.088 0.032 0.011" rpy="0 3.14 1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm B.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_B.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.088 0.032 0.011" rpy="0 3.14 1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm B.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_B.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <inertial>
@@ -397,14 +400,14 @@
     <visual>
       <origin xyz="-0.0085 -0.032 0.011" rpy="3.14 0 1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm B.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_B.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="-0.0085 -0.032 0.011" rpy="3.14 0 1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm B.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_B.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <inertial>
@@ -417,14 +420,14 @@
     <visual>
       <origin xyz="-0.0085 -0.032 0.011" rpy="3.14 0 1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm B.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_B.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="-0.0085 -0.032 0.011" rpy="3.14 0 1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm B.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_B.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <inertial>
@@ -437,14 +440,14 @@
     <visual>
       <origin xyz="0.088 0.032 0.011" rpy="0 3.14 1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm B.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_B.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.088 0.032 0.011" rpy="0 3.14 1.57" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm B.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_B.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <inertial>
@@ -457,14 +460,14 @@
     <visual>
       <origin xyz="0.01 -0.145 -0.053" rpy="1.57 0 -3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm C Right.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_C_Right.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.01 -0.145 -0.053" rpy="1.57 0 -3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm C Right.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_C_Right.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -490,14 +493,14 @@
     <visual>
       <origin xyz="0.01 -0.145 -0.053" rpy="1.57 0 -3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm C Right.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_C_Right.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.01 -0.145 -0.053" rpy="1.57 0 -3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm C Right.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_C_Right.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -523,14 +526,14 @@
     <visual>
       <origin xyz="0.012 -0.1455 -0.040" rpy="1.57 0 -3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm C Left.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_C_Left.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.012 -0.1455 -0.040" rpy="1.57 0 -3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm C Left.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_C_Left.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -556,14 +559,14 @@
     <visual>
       <origin xyz="0.012 -0.1455 -0.040" rpy="1.57 0 -3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm C Left.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_C_Left.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.012 -0.1455 -0.040" rpy="1.57 0 -3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Arm C Left.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Arm_C_Left.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -629,38 +632,38 @@
     <visual>
       <origin xyz="-0.15 -0.435 -0.01" rpy="0 0 4.71" />
       <geometry>
-        <mesh filename="./meshes/UNO Q simplified.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/UNO_Q_simplified.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </visual>
     <collision>
       <origin xyz="-0.15 -0.435 -0.01" rpy="0 0 4.71" />
       <geometry>
-        <mesh filename="./meshes/UNO Q simplified.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/UNO_Q_simplified.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.045 0 0.005" rpy="0 0 -1.57" />
       <geometry>
-        <mesh filename="./meshes/300W 20A DC-DC Buck Converter Step Down.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_300W_20A_DC_DC_Buck_Converter_Step_Down.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </visual>
     <collision>
       <origin xyz="0.045 0 0.005" rpy="0 0 -1.57" />
       <geometry>
-        <mesh filename="./meshes/300W 20A DC-DC Buck Converter Step Down.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_300W_20A_DC_DC_Buck_Converter_Step_Down.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.025 0.03 0.048" rpy="0 3.14 3.14" />
       <geometry>
-        <mesh filename="./meshes/HW-688_LAYOUT.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/HW_688_LAYOUT.stl" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.025 0.03 0.048" rpy="0 3.14 3.14" />
       <geometry>
-        <mesh filename="./meshes/HW-688_LAYOUT.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/HW_688_LAYOUT.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -690,105 +693,105 @@
     <visual>
       <origin xyz="-0.065 -0.05 0.0005" rpy="0 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="-0.065 -0.05 0.0005" rpy="0 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="-0.065 -0.05 0.0255" rpy="0 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="-0.065 -0.05 0.0255" rpy="0 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="-0.065 0.042 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="-0.065 0.042 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="-0.065 0.042 0.0255" rpy="0 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="-0.065 0.042 0.0255" rpy="0 0 0" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.065 0.049 0.0005" rpy="0 0 3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.065 0.049 0.0005" rpy="0 0 3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.065 0.049 0.0255" rpy="0 0 3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.065 0.049 0.0255" rpy="0 0 3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.065 -0.041 0.0005" rpy="0 0 3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.065 -0.041 0.0005" rpy="0 0 3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
       <origin xyz="0.065 -0.041 0.0255" rpy="0 0 3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
       <origin xyz="0.065 -0.041 0.0255" rpy="0 0 3.14" />
       <geometry>
-        <mesh filename="./meshes/260519_PART_Body standoffs.STL" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/p_260519_PART_Body_standoffs.STL" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
