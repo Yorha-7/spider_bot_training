@@ -48,17 +48,19 @@ class EventCfg:
     # gazebo/DART). Randomize friction widely + perturb the base mid-episode.
     physics_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
-        mode="startup",
+        # RESET (was startup): resample per-foot friction EVERY episode, not once.
+        # A body-force DR plateaued because DART's crab is a contact-level foot
+        # SLIP, not a body force -- the policy learned to lean against a force
+        # that doesn't exist in DART. Re-rolling each leg's friction (incl. low,
+        # slippery values) every episode forces the policy to reject a NEW
+        # per-foot contact imbalance online each time (it cannot memorise a fixed
+        # contact), which is the actual sim-to-sim mechanism. Range widened lower
+        # for more slip variety.
+        mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            # Wider PER-BODY friction range so each leg sees an independently
-            # sampled contact (left/right asymmetry up to ~4x). DART's contact
-            # solver gives Big Bertha a systematic right drift/lateral slip; a
-            # policy trained across large per-leg friction asymmetry must learn
-            # to walk straight under any such imbalance instead of memorising
-            # Isaac's symmetric contact (which slipped sideways in Gazebo).
-            "static_friction_range": (0.4, 1.8),
-            "dynamic_friction_range": (0.3, 1.5),
+            "static_friction_range": (0.25, 2.0),
+            "dynamic_friction_range": (0.2, 1.6),
             "restitution_range": (0.0, 0.25),
             "num_buckets": 64,
         },

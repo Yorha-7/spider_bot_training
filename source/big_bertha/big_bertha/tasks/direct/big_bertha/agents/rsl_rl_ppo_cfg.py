@@ -3,9 +3,16 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from big_bertha.tasks.direct.big_bertha.symmetry import compute_symmetry
+
 from isaaclab.utils import configclass
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
+from isaaclab_rl.rsl_rl import (
+    RslRlOnPolicyRunnerCfg,
+    RslRlPpoActorCriticCfg,
+    RslRlPpoAlgorithmCfg,
+    RslRlSymmetryCfg,
+)
 
 
 @configclass
@@ -36,4 +43,12 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,
+        # Mirror-symmetry data augmentation about the forward (x) axis. Forces a
+        # laterally-unbiased gait so it walks straight under DART's contact too
+        # -- the principled cure for the PhysX->DART crab (Mittal 2024), where DR
+        # only made the gait robust, not symmetric. See big_bertha/.../symmetry.py.
+        symmetry_cfg=RslRlSymmetryCfg(
+            use_data_augmentation=True,
+            data_augmentation_func=compute_symmetry,
+        ),
     )
