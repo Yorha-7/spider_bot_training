@@ -45,7 +45,6 @@ class BigberthaEnv(DirectRLEnv):
         self._obs_noise_std = None
 
         # Get specific body indices
-        self._base_id, _ = self._contact_sensor.find_bodies("base_link")
         # preserve_order=True so the returned order matches this list exactly:
         # arm_c_1=FR(idx0), arm_c_2=FL(idx1), arm_c_3=RL(idx2), arm_c_4=RR(idx3),
         # verified against the foot positions in the base frame from the URDF.
@@ -345,10 +344,10 @@ class BigberthaEnv(DirectRLEnv):
         died = torch.any(
             torch.max(torch.norm(net_contact_forces[:, :, self._die_body_ids], dim=-1), dim=1)[0] > 50.0, dim=1
         )
-        # Collapse termination: if the body sinks below 0.06 m it has given way
+        # Collapse termination: if the body sinks below 0.04 m it has given way
         # (spawn z=0.1, steady ~0.085-0.09 are well above), making the sink that
         # degrades the Gazebo gait into a pronk strictly costly.
-        died = died | (self._robot.data.root_pos_w[:, 2] < 0.05)
+        died = died | (self._robot.data.root_pos_w[:, 2] < 0.03)
         return died, time_out
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
