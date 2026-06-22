@@ -3,6 +3,14 @@
 <material name="silver">
   <color rgba="0.700 0.700 0.700 1.000"/>
 </material>
+  <link name="world"/>
+
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+  </joint>
+
   <link name="base_link">
     <visual>
       <origin xyz="0 -0.015 0" rpy="1.57 0 0" />

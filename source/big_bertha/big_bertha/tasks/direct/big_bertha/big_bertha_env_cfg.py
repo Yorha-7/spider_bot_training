@@ -69,7 +69,7 @@ class EventCfg:
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base_link"),
+            "asset_cfg": SceneEntityCfg("robot", body_names="world"),
             "mass_distribution_params": (1.0, 3.0),
             "operation": "add",
         },
@@ -206,7 +206,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     )
 
     contact_sensor: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/(base_link|arm_a_.*|arm_c_.*)",
+        prim_path="/World/envs/env_.*/Robot/(world|arm_a_.*|arm_c_.*)",
         history_length=3,
         update_period=_SIM_DT,  # match sim dt (1/200 implicit, 1/500 explicit)
         track_air_time=True,
