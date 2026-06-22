@@ -215,12 +215,12 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # thrashing) is removed; gait shaping kept but below lin_vel so a trot serves
     # forward motion rather than the reverse.
     lin_vel_reward_scale = 2.0  # exp velocity tracking; reduced (paid for standing, issue #46)
-    z_vel_reward_scale = -0.25  # Vertical velocity penalty (relaxed to allow natural bounce)
-    ang_vel_reward_scale = -0.05  # Roll/pitch rate penalty (stronger: damp spin/wobble)
+    z_vel_reward_scale = -0.35  # Heave penalty (was -0.25): damp bounce that tilts the lidar into ghost walls
+    ang_vel_reward_scale = -0.10  # Roll/pitch RATE penalty (was -0.05): flatter body keeps the lidar level
     joint_torque_reward_scale = -1e-5  # Minimal torque penalty
     joint_accel_reward_scale = -1e-7  # Minimal acceleration penalty
     action_rate_reward_scale = -0.01  # Action smoothness (stronger for a cleaner gait)
-    flat_orientation_reward_scale = -1.5  # Tilt penalty
+    flat_orientation_reward_scale = -2.0  # Static tilt penalty (was -1.5): keep the body lidar level
     joint_deviation_reward_scale = (
         -9.0
     )  # anti-sprawl on HIP joints only (idx 0,3,6,9); -1.0 full-joint was ~8x too weak vs crawl_gait and did nothing
@@ -245,7 +245,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # for yaw rate achieved in the commanded direction (capped at |cmd|), giving
     # a non-saturating gradient to actually turn -- the same trick that broke the
     # shuffle-in-place optimum for forward_progress.
-    yaw_progress_reward_scale = 2.0
+    yaw_progress_reward_scale = 3.0  # 2.0->3.0: commit harder to turns for Nav2's sharp obstacle-avoidance
     # Anti-drift: when commanded ~straight (|cmd_yaw|<0.1) penalize any yaw rate,
     # so the policy holds heading instead of curving (kills the systematic
     # right-drift at the source rather than relying on the deployment heading
