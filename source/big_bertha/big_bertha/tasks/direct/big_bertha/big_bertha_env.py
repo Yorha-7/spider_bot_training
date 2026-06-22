@@ -369,10 +369,11 @@ class BigberthaEnv(DirectRLEnv):
         # quirk where vx=0 was out-of-distribution and the robot walked anyway.
         self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.0, 0.12)
         self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.05, 0.05)
-        # WIDER yaw (was +/-0.15): teach real left/right rotation for obstacle
-        # avoidance so the policy can execute Nav2's ~0.44 rad/s turns directly
-        # (removes the policy-node yaw clamp workaround).
-        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.6, 0.6)
+        # WIDER yaw (+/-0.15 -> +/-0.6 -> +/-0.8): teach real, HARD left/right
+        # rotation for obstacle avoidance so the policy can execute Nav2's sharp
+        # in-place turns directly (the missing "hard turn" that left the robot
+        # unable to escape obstacles); removes the policy-node yaw clamp workaround.
+        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.8, 0.8)
         # Sample the per-episode SUSTAINED bias disturbance (sim-to-sim crab DR):
         # a constant body-frame lateral force + yaw torque held for the episode,
         # so the policy learns to actively hold its line/heading against a
