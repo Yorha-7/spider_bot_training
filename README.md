@@ -1,4 +1,5 @@
 # Spider Bot Training
+ 
 
 Multi-robot locomotion training using PPO on [NVIDIA Isaac Lab](https://isaac-sim.github.io/IsaacLab).
 
