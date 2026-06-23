@@ -256,6 +256,9 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # direct cure for the systematic PhysX->DART sideways/right drift seen in
     # demo_straight -- it makes a steady sideways slip clearly sub-optimal.
     lat_straight_penalty_scale = -6.0  # -4->-6 with the 6 N bias: penalize residual body-y velocity harder still
+    # Stand-still: penalize forward body velocity when commanded to fully stop, so
+    # the gait holds position on a zero command (the post-goal drift fix, training side).
+    stand_still_penalty_scale = -6.0
     forward_progress_reward_scale = (
         4.0  # reduced 10->4 + cap 0.12: stop the "faster always pays" gradient so the gait creeps deliberately
     )

@@ -99,6 +99,7 @@ class BigberthaEnv(DirectRLEnv):
                 "yaw_progress",
                 "yaw_straight_pen",
                 "lat_straight_pen",
+                "stand_still_pen",
                 "forward_progress",
             ]
         }
@@ -231,6 +232,15 @@ class BigberthaEnv(DirectRLEnv):
         # not punish a steady slip hard enough.
         lat_straight_gate = (torch.abs(self._commands[:, 1]) < 0.02).float()
         lat_straight_pen = torch.square(self._robot.data.root_lin_vel_b[:, 1]) * lat_straight_gate
+        # Stand-still: when commanded to FULLY stop (vx~0, vy~0, wz~0), penalize
+        # the body's forward velocity so the gait holds position on a zero command
+        # instead of creeping forward -- the source of the post-goal drift in DART.
+        stand_gate = (
+            (torch.abs(self._commands[:, 0]) < 0.02)
+            & (torch.abs(self._commands[:, 1]) < 0.02)
+            & (torch.abs(self._commands[:, 2]) < 0.05)
+        ).float()
+        stand_still_pen = torch.square(self._robot.data.root_lin_vel_b[:, 0]) * stand_gate
         # joint torques
         joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
         # joint acceleration
@@ -319,6 +329,7 @@ class BigberthaEnv(DirectRLEnv):
             "yaw_progress": yaw_progress * self.cfg.yaw_progress_reward_scale * self.step_dt,
             "yaw_straight_pen": yaw_straight_pen * self.cfg.yaw_straight_penalty_scale * self.step_dt,
             "lat_straight_pen": lat_straight_pen * self.cfg.lat_straight_penalty_scale * self.step_dt,
+            "stand_still_pen": stand_still_pen * self.cfg.stand_still_penalty_scale * self.step_dt,
             "forward_progress": forward_progress * self.cfg.forward_progress_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
