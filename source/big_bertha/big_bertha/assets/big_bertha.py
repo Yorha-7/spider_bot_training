@@ -44,44 +44,44 @@ if os.environ.get("BB_ACTUATOR", "implicit").lower() == "explicit":
         joint_names_expr=_HIP_JOINTS,
         effort_limit=1.18,
         velocity_limit=6.54,
-        stiffness=5.0,
-        damping=0.19,
+        stiffness=20.0,
+        damping=2,
     )
     _THIGH_ACT = IdealPDActuatorCfg(
         joint_names_expr=_THIGH_JOINTS,
         effort_limit=1.18,
         velocity_limit=6.54,
-        stiffness=5.0,
-        damping=0.13,
+        stiffness=20,
+        damping=2,
     )
     _CALF_ACT = IdealPDActuatorCfg(
         joint_names_expr=_CALF_JOINTS,
         effort_limit=1.18,
         velocity_limit=6.54,
-        stiffness=5.0,
-        damping=0.08,
+        stiffness=20,
+        damping=2,
     )
 else:
     _HIP_ACT = ImplicitActuatorCfg(
         joint_names_expr=_HIP_JOINTS,
         effort_limit_sim=1.18,
         velocity_limit_sim=6.54,
-        stiffness=5.0,
-        damping=0.19,
+        stiffness=20,
+        damping=2,
     )
     _THIGH_ACT = ImplicitActuatorCfg(
         joint_names_expr=_THIGH_JOINTS,
         effort_limit_sim=1.18,
         velocity_limit_sim=6.54,
-        stiffness=5.0,
-        damping=0.13,
+        stiffness=20,
+        damping=2,
     )
     _CALF_ACT = ImplicitActuatorCfg(
         joint_names_expr=_CALF_JOINTS,
         effort_limit_sim=1.18,
         velocity_limit_sim=6.54,
-        stiffness=5.0,
-        damping=0.08,
+        stiffness=20,
+        damping=2   
     )
 
 BIG_BERTHA_CFG = ArticulationCfg(
