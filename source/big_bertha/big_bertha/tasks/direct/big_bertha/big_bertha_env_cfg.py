@@ -236,7 +236,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     foot_clearance_reward_scale = 6.0  # reference crawl: reward airborne foot reaching ~0.045 m clearance
     multi_swing_penalty_scale = -2.0  # penalize 2+ feet airborne (trot/pronk) -> enforce 3-foot support tripod
     yaw_rate_reward_scale = (
-        2.0  # strengthened (1->2) so the policy learns wider left/right rotation for obstacle avoidance
+        3.0  # 2->3: track the commanded yaw rate tightly so the gait turns onto a new path responsively
     )
     # LINEAR yaw-progress reward (the turn enabler). The exp yaw term above is
     # flat at large errors: turning 0 -> 0.05 rad/s barely raises it while it
@@ -250,7 +250,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # so the policy holds heading instead of curving (kills the systematic
     # right-drift at the source rather than relying on the deployment heading
     # controller alone).
-    yaw_straight_penalty_scale = -1.0
+    yaw_straight_penalty_scale = -2.0  # -1->-2: hold heading harder so the trail tracks the path, not weaves
     # Anti-crab: when commanded ~straight laterally (|cmd_vy|<0.02) penalize
     # body-y velocity, the lateral analogue of yaw_straight_penalty. This is the
     # direct cure for the systematic PhysX->DART sideways/right drift seen in
