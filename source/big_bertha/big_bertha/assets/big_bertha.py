@@ -77,11 +77,7 @@ else:
         damping=2,
     )
     _CALF_ACT = ImplicitActuatorCfg(
-        joint_names_expr=_CALF_JOINTS,
-        effort_limit_sim=1.18,
-        velocity_limit_sim=6.54,
-        stiffness=20,
-        damping=2   
+        joint_names_expr=_CALF_JOINTS, effort_limit_sim=1.18, velocity_limit_sim=6.54, stiffness=20, damping=2
     )
 
 BIG_BERTHA_CFG = ArticulationCfg(
