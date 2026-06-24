@@ -184,16 +184,16 @@ python scripts/rsl_rl/play_teleop.py --task spider_3
 | FL_calf_joint | 150 | 0 | +2 | 0 |
 |
 | FR_hip_joint | 30 | 150 | 0 | 10 |
-| FR_thigh_joint | 140 | 180 | 0 | 9 |
-| FR_calf_joint | 40 | 180 | +8 | 8 |
-| (Yet to be calculated) |
-| RL_hip_joint | 0 | 0 | 0 | 0 |
-| RL_thigh_joint | 0 | 0 | 0 | 0 |
-| RL_calf_joint | 0 | 0 | 0 | 0 |
-| RR_hip_joint | 0 | 0 | 0 | 0 |
-| RR_thigh_joint | 0 | 0 | 0 | 0 |
-| RR_calf_joint | 0 | 0 | 0 | 0 |
-
+| FR_thigh_joint | 140 | 0 | 0 | 9 |
+| FR_calf_joint | 180 | 40 | +8 | 8 |
+|
+| RL_hip_joint | 140 | 0 | 0 | 6 |
+| RL_thigh_joint | 50 | 180 | +10 | 5 |
+| RL_calf_joint | 0 | 150 | +5 | 4 |
+|
+| RR_hip_joint | 45 | 180 | 0 | 14 |
+| RR_thigh_joint | 135 | 0 |  0 | 13 |
+| RR_calf_joint | 40 | 180 | 0 | 12 |
 
 ## Development
 
