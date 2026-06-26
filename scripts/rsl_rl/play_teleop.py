@@ -44,11 +44,12 @@ import importlib.metadata as metadata
 import os
 
 import big_bertha.tasks  # noqa: F401
-import carb
 import gymnasium as gym
-import omni.appwindow
 import torch
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
+
+import carb
+import omni.appwindow
 
 from isaaclab.envs import (
     DirectMARLEnv,
