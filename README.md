@@ -7,7 +7,7 @@ Multi-robot locomotion training using PPO on [NVIDIA Isaac Lab](https://isaac-si
 
 | Spider (SG90) | Big Bertha (MG995) |
 |:---:|:---:|
-| <img src="assets/gifs/spider.gif" width="360"> | <img src="assets/gifs/big_bertha.gif" width="360"> |
+| <img src="assets/gifs/spider.gif" width="360"> | <img src="assets/gifs/big_bertha_v0.1.gif" width="360"> |
 
 ## Features
 
