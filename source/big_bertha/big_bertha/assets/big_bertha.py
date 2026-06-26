@@ -15,8 +15,8 @@ _USD_PATH = os.path.join(_REPO_ROOT, "assets", "usd", "big_bertha", "big_bertha.
 
 # --- Per-joint-group PD gains (tuned to reflected inertia from URDF) --------
 # Each joint group has different reflected inertia, so the same kp/kd would
-# give very different damping ratios.  for current experimentation, only room 
-# for improvement is ceated.
+# give very different damping ratios.  for current experimentation, only room
+# for improvement is created.
 #   HIP    (110,113,116,119): I_eff ≈ 0.0014-0.0026 kg·m² → kp=5, kd=0.19
 #   THIGH  (111,114,117,120): I_eff ≈ 0.00115 kg·m²       → kp=5, kd=0.13
 #   CALF   (112,115,118,121): I_eff ≈ 0.00048 kg·m²       → kp=5, kd=0.08
