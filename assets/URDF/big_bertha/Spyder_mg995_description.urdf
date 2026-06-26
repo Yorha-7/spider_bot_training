@@ -891,28 +891,28 @@
     <parent link="arm_b_1_1" />
     <child link="arm_c_1_1" />
     <axis xyz="0 0 1" />
-    <limit lower="0" upper="2.355" />
+    <limit lower="0" upper="2.0" />
   </joint>
   <joint name="Revolute_112" type="revolute">
     <origin xyz="0.08 0.03 0" rpy="0 1.57 1.57" />
     <parent link="arm_b_4_1" />
     <child link="arm_c_4_1" />
     <axis xyz="0 0 1" />
-    <limit lower="0" upper="2.355" />
+    <limit lower="0" upper="2.0" />
   </joint>
   <joint name="Revolute_118" type="revolute">
     <origin xyz="0.08 0.03 0" rpy="0 1.57 1.57" />
     <parent link="arm_b_2_1" />
     <child link="arm_c_2_1" />
     <axis xyz="0 0 1" />
-    <limit lower="0" upper="2.355" />
+    <limit lower="0" upper="2.0" />
   </joint>
   <joint name="Revolute_121" type="revolute">
     <origin xyz="0.0775 0.03 0.001" rpy="0 1.57 1.57" />
     <parent link="arm_b_3_1" />
     <child link="arm_c_3_1" />
     <axis xyz="0 0 1" />
-    <limit lower="0" upper="2.355" />
+    <limit lower="0" upper="2.0" />
   </joint>
   <joint name="battery_joint" type="fixed">
     <origin xyz="0.0657 -0.0657 0.0585" rpy="3.140796 -0 0" />
