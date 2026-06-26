@@ -3,12 +3,12 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Play a trained policy in Isaac Sim with live keyboard teleop (WASD + QE).
+"""Play a trained policy in Isaac Sim with live keyboard teleop (drive in the viewport).
 
-Unlike a fixed-velocity replay, this lets you drive the robot interactively and
-watch how it actually walks, strafes, and turns. It only writes the velocity
-command (env._commands) that the policy already consumes -- the env, env_cfg,
-reward, and actuators are untouched.
+Keys are bound to the Isaac viewport via carb input, so they register in the
+SIM WINDOW (focus the window, not the terminal). Hold-to-move: hold a key to
+command, release to stop. Only the velocity command (env._commands) the policy
+already consumes is written -- env, env_cfg, reward, and actuators are untouched.
 """
 
 import argparse
@@ -18,7 +18,7 @@ from isaaclab.app import AppLauncher
 
 import cli_args  # isort: skip
 
-parser = argparse.ArgumentParser(description="Teleoperate a trained RL agent with the keyboard.")
+parser = argparse.ArgumentParser(description="Teleoperate a trained RL agent from the Isaac viewport.")
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
@@ -42,10 +42,11 @@ simulation_app = app_launcher.app
 
 import importlib.metadata as metadata
 import os
-import time
 
 import big_bertha.tasks  # noqa: F401
+import carb
 import gymnasium as gym
+import omni.appwindow
 import torch
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
@@ -65,23 +66,56 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
-from spider_rl.utils import KeyboardInput
-
-# Clamp keyboard commands to the range the policy was actually trained on
-# (big_bertha_env._reset_idx): forward-only vx, small lateral vy, wide yaw.
-# Driving outside this band is out-of-distribution and just looks broken.
-_VX_RANGE = (0.0, 0.12)
-_VY_RANGE = (-0.05, 0.05)
-_WZ_RANGE = (-0.8, 0.8)
+# Command magnitudes, clamped to the band the policy was trained on
+# (forward-only vx, small lateral vy, wide yaw).
+_VX = 0.12
+_VY = 0.05
+_WZ = 0.8
 
 
-def _clamp(value: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, value))
+class ViewportTeleop:
+    """Hold-to-move SE2 teleop bound to the Isaac viewport keyboard (carb input)."""
+
+    def __init__(self):
+        self.vx = 0.0
+        self.vy = 0.0
+        self.wz = 0.0
+        appwindow = omni.appwindow.get_default_app_window()
+        self._keyboard = appwindow.get_keyboard()
+        self._input = carb.input.acquire_input_interface()
+        self._sub = self._input.subscribe_to_keyboard_events(self._keyboard, self._on_key)
+
+    def _on_key(self, event, *args):
+        k = carb.input.KeyboardInput
+        et = carb.input.KeyboardEventType
+        if event.type in (et.KEY_PRESS, et.KEY_REPEAT):
+            if event.input == k.W:
+                self.vx = _VX
+            elif event.input == k.S:
+                self.vx = 0.0  # the crawl has no reverse; S stops forward motion
+            elif event.input == k.A:
+                self.vy = _VY
+            elif event.input == k.D:
+                self.vy = -_VY
+            elif event.input == k.Q:
+                self.wz = _WZ
+            elif event.input == k.E:
+                self.wz = -_WZ
+            elif event.input == k.SPACE:
+                self.vx = self.vy = self.wz = 0.0
+        elif event.type == et.KEY_RELEASE:
+            if event.input in (k.W, k.S):
+                self.vx = 0.0
+            elif event.input in (k.A, k.D):
+                self.vy = 0.0
+            elif event.input in (k.Q, k.E):
+                self.wz = 0.0
+        return True
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
-    """Drive a trained RSL-RL policy with the keyboard."""
+    """Drive a trained RSL-RL policy with the viewport keyboard."""
     task_name = args_cli.task.split(":")[-1]
     train_task_name = task_name.replace("-Play", "")
 
@@ -121,45 +155,32 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     runner.load(resume_path)
 
     policy = runner.get_inference_policy(device=env.unwrapped.device)
-    dt = env.unwrapped.step_dt
 
-    keyboard = KeyboardInput()
-    keyboard.start()
-    keyboard.print_controls()
+    teleop = ViewportTeleop()
     print(
-        "--- Teleop (focus THIS terminal to type) ---\n"
-        "W/S forward/back   A/D strafe   Q/E turn   SPACE stop   Ctrl-C quit\n"
-        f"commands clamped to training range: vx{_VX_RANGE} vy{_VY_RANGE} wz{_WZ_RANGE}\n"
-        "--------------------------------------------"
+        "\n=========== TELEOP: click/focus the ISAAC VIEWPORT WINDOW, then HOLD keys ===========\n"
+        "  W = forward   A/D = strafe   Q/E = turn   S or SPACE = stop\n"
+        "  (hold to move, release to stop; commands clamped to the trained range)\n"
+        "====================================================================================="
     )
 
     cmd = torch.zeros(1, 3, device=env.unwrapped.device, dtype=torch.float)
     obs = env.get_observations()
-    last_print = 0.0
-    try:
-        while simulation_app.is_running():
-            start_time = time.time()
-            cmd[0, 0] = _clamp(keyboard.vel_x, *_VX_RANGE)
-            cmd[0, 1] = _clamp(keyboard.vel_y, *_VY_RANGE)
-            cmd[0, 2] = _clamp(keyboard.ang_z, *_WZ_RANGE)
-            with torch.inference_mode():
-                env.unwrapped._commands[:] = cmd
-                actions = policy(obs)
-                obs, _, _, _ = env.step(actions)
-                env.unwrapped._commands[:] = cmd
-            if start_time - last_print > 0.5:
-                print(
-                    f"\r[cmd] vx={cmd[0, 0]:+.3f}  vy={cmd[0, 1]:+.3f}  wz={cmd[0, 2]:+.3f}   ",
-                    end="",
-                    flush=True,
-                )
-                last_print = start_time
-            sleep_time = dt - (time.time() - start_time)
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-    finally:
-        keyboard.stop()
-        env.close()
+    step = 0
+    while simulation_app.is_running():
+        cmd[0, 0] = teleop.vx
+        cmd[0, 1] = teleop.vy
+        cmd[0, 2] = teleop.wz
+        with torch.inference_mode():
+            env.unwrapped._commands[:] = cmd
+            actions = policy(obs)
+            obs, _, _, _ = env.step(actions)
+            env.unwrapped._commands[:] = cmd
+        step += 1
+        if step % 25 == 0:
+            print(f"\r[cmd] vx={cmd[0, 0]:+.3f}  vy={cmd[0, 1]:+.3f}  wz={cmd[0, 2]:+.3f}   ", end="", flush=True)
+
+    env.close()
 
 
 if __name__ == "__main__":
