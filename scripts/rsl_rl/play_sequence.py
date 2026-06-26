@@ -47,7 +47,6 @@ simulation_app = app_launcher.app
 
 import importlib.metadata as metadata
 import os
-import time
 
 import big_bertha.tasks  # noqa: F401
 import gymnasium as gym
