@@ -71,12 +71,10 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
-# (label, [vx, vy, wz]).  Trained ranges: vx in [0, 0.12] (forward only),
-# vy in [-0.05, 0.05], wz in [-0.8, 0.8].  Backward is out-of-distribution
-# (the crawl has no reverse) -- included so you can see it can't go back.
+# (label, [vx, vy, wz]).  Trained ranges: vx in [0, 0.12] (forward only,
+# the crawl has no reverse), vy in [-0.05, 0.05], wz in [-0.8, 0.8].
 SEQUENCE = [
     ("forward", [0.10, 0.0, 0.0]),
-    ("backward (no reverse - out of distribution)", [-0.10, 0.0, 0.0]),
     ("strafe left", [0.0, 0.05, 0.0]),
     ("strafe right", [0.0, -0.05, 0.0]),
     ("turn left", [0.0, 0.0, 0.5]),
