@@ -76,6 +76,9 @@ class BigberthaEnv(DirectRLEnv):
         # legs, which let the policy satisfy the gait reward with a pronk.)
         self._foot_pairs = [[0, 2], [1, 3]]  # [FR+RL, FL+RR] diagonals
 
+        # Correction factor for the 180° rotated IMU: negate X and Y (Z unchanged)
+        self._imu_negate = torch.tensor([-1.0, -1.0, 1.0], device=self.device)
+
         # Logging
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
@@ -146,13 +149,18 @@ class BigberthaEnv(DirectRLEnv):
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
+        # IMU sensor data: simulated MPU6050 with 180° Z rotation
+        imu = self.scene["imu"]
+        # Negate X/Y — mirror the hardware bridge correction to base_link frame
+        ang_vel_b = imu.data.ang_vel_b * self._imu_negate
+        proj_gravity = imu.data.projected_gravity_b * self._imu_negate
         obs = torch.cat(
             [
                 tensor
                 for tensor in (
                     self._robot.data.root_lin_vel_b,
-                    self._robot.data.root_ang_vel_b,
-                    self._robot.data.projected_gravity_b,
+                    ang_vel_b,
+                    proj_gravity,
                     self._commands,
                     self._robot.data.joint_pos - self._robot.data.default_joint_pos,
                     self._robot.data.joint_vel,
@@ -180,6 +188,10 @@ class BigberthaEnv(DirectRLEnv):
         return observations
 
     def _get_rewards(self) -> torch.Tensor:
+        imu = self.scene["imu"]
+        ang_vel_b = imu.data.ang_vel_b * self._imu_negate
+        proj_gravity = imu.data.projected_gravity_b * self._imu_negate
+
         # Linear velocity tracking — SHARP Gaussian on the xy command error.
         # sigma^2 was 0.25, which is far too lenient for the small forward
         # commands here: standing still at cmd 0.2 still scored exp(-0.04/0.25)
@@ -202,18 +214,18 @@ class BigberthaEnv(DirectRLEnv):
         # z velocity tracking
         z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
         # angular velocity x/y
-        ang_vel_error = torch.sum(torch.square(self._robot.data.root_ang_vel_b[:, :2]), dim=1)
+        ang_vel_error = torch.sum(torch.square(ang_vel_b[:, :2]), dim=1)
         # yaw rate tracking — sharp Gaussian on the yaw-rate error, same shape as
         # lin_vel. No 1/|cmd|^2 blow-up (that term reached 13-22 in training and
         # made spinning the dominant reward).
-        yaw_rate_error = torch.square(self._commands[:, 2] - self._robot.data.root_ang_vel_b[:, 2])
+        yaw_rate_error = torch.square(self._commands[:, 2] - ang_vel_b[:, 2])
         yaw_reward = torch.exp(-yaw_rate_error / 0.1)
         # LINEAR yaw-progress: reward yaw rate achieved in the COMMANDED
         # direction, capped at |cmd|, with no saturation -- so turning always
         # beats not turning (the exp term above is flat at large error and gave
         # the policy no reason to commit to a turn). Gated on a real yaw command.
         cmd_yaw = self._commands[:, 2]
-        ach_yaw = self._robot.data.root_ang_vel_b[:, 2]
+        ach_yaw = ang_vel_b[:, 2]
         yaw_progress = torch.where(
             torch.abs(cmd_yaw) > 0.1,
             torch.clamp(ach_yaw * torch.sign(cmd_yaw), min=0.0),
@@ -247,7 +259,7 @@ class BigberthaEnv(DirectRLEnv):
         # action rate
         action_rate = torch.sum(torch.square(self._actions - self._previous_actions), dim=1)
         # flat orientation
-        flat_orientation = torch.sum(torch.square(self._robot.data.projected_gravity_b[:, :2]), dim=1)
+        flat_orientation = torch.sum(torch.square(proj_gravity[:, :2]), dim=1)
 
         # Anti-sprawl posture: keep the HIP joints near the compact default pose.
         # The explicit fine-tune drifted into a WIDE splayed stance (sum(dev^2)

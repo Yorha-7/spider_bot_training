@@ -19,7 +19,7 @@ from isaaclab.envs import DirectRLEnvCfg, ViewerCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg, ImuCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
@@ -212,8 +212,23 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
         track_air_time=True,
     )
 
+    # IMU sensor: simulates the MPU6050 mounted 180° rotated on the carrier board.
+    # The sensor frame is offset relative to base_link to match the visual STL
+    # centroid, and the 180° Z rotation is corrected in the env by negating X/Y
+    # (mirroring the real hardware bridge pipeline).
+    @configclass
+    class BigBerthaSceneCfg(InteractiveSceneCfg):
+        imu = ImuCfg(
+            prim_path="{ENV_REGEX_NS}/Robot/base_link",
+            offset=ImuCfg.OffsetCfg(
+                pos=(0.063460, -0.094057, 0.092712),  # MPU6050 mesh centroid in base_link
+                rot=(0.0, 0.0, 0.0, 1.0),  # 180° about Z: q(w,x,y,z)
+            ),
+            gravity_bias=(0.0, 0.0, 0.0),
+        )
+
     # scene
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=200, env_spacing=2.0, replicate_physics=True)
+    scene: BigBerthaSceneCfg = BigBerthaSceneCfg(num_envs=200, env_spacing=2.0, replicate_physics=True)
 
     # events
     events: EventCfg = EventCfg()
