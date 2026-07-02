@@ -271,7 +271,7 @@ class BigberthaEnv(DirectRLEnv):
         # in Gazebo the body settles lower (DART contact), and a too-peaky term
         # made z<0.06 fully out-of-distribution -> the policy pronked. Tolerate
         # 0.06-0.12 while still peaking at the 0.09 Isaac standing height.
-        base_height_reward = torch.exp(-torch.square((base_height - 0.09) / 0.035))
+        base_height_reward = torch.exp(-torch.square((base_height - 0.20) / 0.035))
 
         # Joint activity reward - encourage using all joints
         joint_vel_magnitude = torch.sum(torch.abs(self._robot.data.joint_vel), dim=1)

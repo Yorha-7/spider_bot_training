@@ -180,17 +180,17 @@ python scripts/rsl_rl/play_teleop.py --task spider_3
 | Joint | lower limit | upper_limit | off | channel | direcetion |
 |-----|-----|-----|-----|-----|-----|
 | arm_a_2_1 | 180 | 50 | 0 | 2 | -1 |
-| FL_thigh_joint | 50 | 180 | +10 | 1 | -1 |
-| FL_calf_joint | 150 | 0 | +2 | 0 | -1 |
-| FR_hip_joint | 30 | 150 | 0 | 10 | +1 |
-| FR_thigh_joint | 140 | 0 | 0 | 9 | -1 |
-| FR_calf_joint | 180 | 40 | +8 | 8 | -1 |
-| RL_hip_joint | 140 | 0 | 0 | 6 | -1 |
-| RL_thigh_joint | 50 | 180 | +10 | 5 | -1 |
-| RL_calf_joint | 0 | 150 | +5 | 4 | -1 |
-| RR_hip_joint | 45 | 180 | 0 | 14 | +1 |
-| RR_thigh_joint | 135 | 0 |  0 | 13 | -1 |
-| RR_calf_joint | 40 | 180 | 0 | 12 | -1 |
+| arm_b_2_1 | 50 | 180 | +10 | 1 | -1 |
+| arm_c_2_1 | 150 | 0 | +2 | 0 | -1 |
+| arm_a_1_1 | 30 | 150 | 0 | 10 | +1 |
+| arm_b_1_1 | 140 | 0 | 0 | 9 | -1 |
+| arm_c_1_1 | 180 | 40 | +8 | 8 | -1 |
+| arm_a_3_1 | 140 | 0 | 0 | 6 | -1 |
+| arm_b_3_1 | 50 | 180 | +10 | 5 | -1 |
+| arm_c_3_1 | 0 | 150 | +5 | 4 | -1 |
+| arm_a_4_1 | 45 | 180 | 0 | 14 | +1 |
+| arm_b_4_1 | 135 | 0 |  0 | 13 | -1 |
+| arm_c_4_1 | 40 | 180 | 0 | 12 | -1 |
 
 ## Development
 
