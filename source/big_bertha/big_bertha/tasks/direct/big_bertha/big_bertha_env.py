@@ -17,6 +17,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor
+from isaaclab.utils.math import quat_apply
 
 from .big_bertha_env_cfg import BigberthaEnvCfg
 
@@ -58,6 +59,22 @@ class BigberthaEnv(DirectRLEnv):
         self._feet_body_ids, _ = self._robot.find_bodies(
             ["arm_c_1_1", "arm_c_2_1", "arm_c_3_1", "arm_c_4_1"], preserve_order=True
         )
+        # Foot CONTACT-POINT offset in the arm_c link frame. The arm_c link origin
+        # sits at the knee (~0.145 m above the contact), so its world velocity is
+        # contaminated by body motion and is NOT a valid slip signal. This offset
+        # (from the arm_c collision mesh origin in the URDF) maps the link pose to
+        # the actual foot tip; verified in-sim (planted tip z = 0.000). Used by the
+        # foot-tip slip penalty in _get_rewards.
+        self._tip_offset = torch.tensor([0.01, -0.145, -0.053], device=self.device)
+        # Body +x unit vector, for projecting foot motion onto the heading
+        # direction in the forward-stride reward.
+        self._x_unit = torch.tensor([1.0, 0.0, 0.0], device=self.device).expand(self.num_envs, 3)
+        # Event-based stride state: the world tip position at each foot's last
+        # LIFTOFF, and the previous-step contact mask. The stride reward pays a foot
+        # only at TOUCHDOWN, for how far forward it moved since liftoff -- so it
+        # cannot be earned by sweeping the foot forward while in contact.
+        self._foot_liftoff_pos = torch.zeros(self.num_envs, 4, 3, device=self.device)
+        self._prev_contact = torch.ones(self.num_envs, 4, dtype=torch.bool, device=self.device)
         self._die_body_ids, _ = self._contact_sensor.find_bodies(["arm_a_1_1", "arm_a_2_1", "arm_a_3_1", "arm_a_4_1"])
         # Articulation base index + buffers for the SUSTAINED lateral-bias DR: a
         # constant body-frame sideways force + yaw torque held for the whole
@@ -104,6 +121,8 @@ class BigberthaEnv(DirectRLEnv):
                 "lat_straight_pen",
                 "stand_still_pen",
                 "forward_progress",
+                "foot_dragging",
+                "foot_stride",
             ]
         }
 
@@ -316,12 +335,54 @@ class BigberthaEnv(DirectRLEnv):
 
         # C) Swing-foot CLEARANCE — the missing HEIGHT signal. Air TIME alone
         # rewarded a foot sliding 1 cm off the ground identically to a 4 cm step,
-        # giving the fast low-lift shuffle (measured air_time 0.056 s). Reward
-        # each AIRBORNE foot (gated on air>0.06 s, so a planted/sliding foot pays
-        # zero) for its world-frame height reaching a ~0.045 m clear lift.
+        # giving the fast low-lift shuffle. Reward each AIRBORNE foot (gated on
+        # air>0.06 s, so a planted/sliding foot pays zero) for its world-frame
+        # height reaching a clean clear lift.
+        # NOTE (new-URDF recalibration): the foot link (arm_c_*_1) origin sits
+        # near the knee, not the toe, so on the new geometry it stands at z~0.144 m
+        # (planted) and a real swing lifts it to ~0.16-0.18 m -- measured from a
+        # forward rollout. The OLD 0.045 m target was ~10 sigma below that, so this
+        # 6.0-scale term was logging EXACTLY 0.0 (dead): the policy got NO foot-lift
+        # gradient, which is why every leg dragged and one folded under (no per-foot
+        # lift incentive). Target the clean ~3.5 cm lift (0.18 m, = the current
+        # best-case swing height) so all four feet are paid to clear the ground.
         feet_z = self._robot.data.body_pos_w[:, self._feet_body_ids, 2]  # (N,4) world z
         swinging = (feet_air_c > 0.06).float()
-        foot_clearance_reward = torch.sum(torch.exp(-torch.square((feet_z - 0.045) / 0.03)) * swinging, dim=1)
+        foot_clearance_reward = torch.sum(torch.exp(-torch.square((feet_z - 0.18) / 0.03)) * swinging, dim=1)
+
+        # Foot-TIP kinematics (shared by D + E). The arm_c link origin is the KNEE
+        # (~0.145 m above the contact), so link velocity is contaminated by body
+        # motion. Compute the actual contact point via FK and its world velocity
+        # tip_vel = v_link + w_link x (R*offset). Verified: planted tip z = 0.000.
+        in_contact = (feet_air_c < 0.001).float()  # (N,4)
+        foot_quat = self._robot.data.body_quat_w[:, self._feet_body_ids, :]  # (N,4,4)
+        foot_linvel = self._robot.data.body_lin_vel_w[:, self._feet_body_ids, :]  # (N,4,3)
+        foot_angvel = self._robot.data.body_ang_vel_w[:, self._feet_body_ids, :]  # (N,4,3)
+        r_tip = quat_apply(foot_quat, self._tip_offset.expand(self.num_envs, 4, 3))  # knee->tip, world
+        tip_vel_xy = (foot_linvel + torch.cross(foot_angvel, r_tip, dim=-1))[..., :2]  # (N,4,2) world
+
+        # D) Stance-slip penalty: a PLANTED tip must not skid (grip the ground).
+        foot_dragging = torch.sum(torch.norm(tip_vel_xy, dim=2) * in_contact, dim=1)
+
+        # E) DENSE forward-stride reward (v0.8): reward each AIRBORNE foot for its
+        # forward displacement FROM LIFTOFF (body-heading dir, clamped). It is
+        # position-based (not velocity, so unlike v0.6 it won't push an aggressive
+        # fast-slide) and SWING-gated (so, unlike a contact-time reward, it cannot
+        # be earned by sweeping the foot forward through contact). v0.7's
+        # touchdown-only variant was too SPARSE to steer the gait (logged ~0.045);
+        # rewarding it every swing step makes it strong enough to actually drive
+        # planting the foot ahead = a real step. tip_pos = link_pos + R*offset (FK).
+        tip_pos = self._robot.data.body_pos_w[:, self._feet_body_ids, :] + r_tip  # (N,4,3) world tip
+        cur_contact = feet_air_c < 0.001  # (N,4) bool
+        liftoff = self._prev_contact & (~cur_contact)  # foot just left the ground
+        self._foot_liftoff_pos = torch.where(liftoff.unsqueeze(-1), tip_pos, self._foot_liftoff_pos)
+        fwd_w = quat_apply(self._robot.data.root_quat_w, self._x_unit)[:, :2]  # (N,2) heading in world
+        fwd_w = fwd_w / (torch.norm(fwd_w, dim=1, keepdim=True) + 1e-6)
+        step_disp = (tip_pos - self._foot_liftoff_pos)[..., :2]  # (N,4,2) liftoff->now
+        stride_fwd = torch.sum(step_disp * fwd_w[:, None, :], dim=2)  # (N,4) fwd displacement (m)
+        fwd_cmd_gate = (self._commands[:, 0] > 0.05).float()  # (N,)
+        foot_stride = torch.sum(torch.clamp(stride_fwd, 0.0, 0.12) * swinging, dim=1) * fwd_cmd_gate
+        self._prev_contact = cur_contact
 
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_reward * self.cfg.lin_vel_reward_scale * self.step_dt,
@@ -344,6 +405,8 @@ class BigberthaEnv(DirectRLEnv):
             "lat_straight_pen": lat_straight_pen * self.cfg.lat_straight_penalty_scale * self.step_dt,
             "stand_still_pen": stand_still_pen * self.cfg.stand_still_penalty_scale * self.step_dt,
             "forward_progress": forward_progress * self.cfg.forward_progress_reward_scale * self.step_dt,
+            "foot_dragging": foot_dragging * self.cfg.foot_dragging_penalty_scale * self.step_dt,
+            "foot_stride": foot_stride * self.cfg.foot_stride_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -374,6 +437,10 @@ class BigberthaEnv(DirectRLEnv):
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
+        # Reset event-stride state: assume planted (so a liftoff is recorded before
+        # any touchdown -> no stale stride on the first landing after reset).
+        self._prev_contact[env_ids] = True
+        self._foot_liftoff_pos[env_ids] = 0.0
         # Sample new velocity commands. Forward-biased curriculum: the demo
         # drives the robot forward, so x is mostly positive (up to 0.6 m/s, which
         # brackets the 0.3 m/s demo command), with modest lateral and yaw for
