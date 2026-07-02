@@ -32,6 +32,14 @@ _EXPLICIT = os.environ.get("BB_ACTUATOR", "implicit").lower() == "explicit"
 _SIM_DT = 1 / 500 if _EXPLICIT else 1 / 200
 _DECIMATION = 10 if _EXPLICIT else 4
 
+# A/B friction-floor toggle (BB_FRICTION_FLOOR=high|low, default high). "high"
+# raises the foot-friction DR floor so the feet CAN grip (anti-slide); "low" keeps
+# the historical 0.25 floor (what the old-URDF policies trained on). Ground μ stays
+# 1.0, so effective foot μ = ground x foot-material (multiply combine).
+_FRIC_HIGH = os.environ.get("BB_FRICTION_FLOOR", "high").lower() != "low"
+_STATIC_FRIC_RANGE = (1.0, 2.0) if _FRIC_HIGH else (0.25, 2.0)
+_DYNAMIC_FRIC_RANGE = (0.9, 1.6) if _FRIC_HIGH else (0.2, 1.6)
+
 
 @configclass
 class EventCfg:
@@ -59,18 +67,28 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.25, 2.0),
-            "dynamic_friction_range": (0.2, 1.6),
+            # Low end raised (was 0.25/0.2): training on near-frictionless ground
+            # taught a slip-tolerant SKATING gait. Keep a wide robustness range but
+            # off the ice so the foot_dragging penalty is physically satisfiable.
+            "static_friction_range": _STATIC_FRIC_RANGE,
+            "dynamic_friction_range": _DYNAMIC_FRIC_RANGE,
             "restitution_range": (0.0, 0.25),
             "num_buckets": 64,
         },
     )
+    # Payload DR sized to the REAL robot. The URDF models 1.602 kg total
+    # (base_link 0.264 kg; battery 0.50, lidar 0.15, circuit box 0.14, legs ~0.50).
+    # A real assembled bot is a bit heavier than the CAD model (unmodelled wiring,
+    # fasteners, connectors, actual LiPo), so add +0 to +0.3 kg -> total ~1.6-1.9 kg
+    # (0-19% over the model). The old (1.0, 3.0) added up to ~190% of body mass onto
+    # a 0.264 kg base link, forcing the policy to fight a phantom top-heavy load
+    # every episode (part of the "struggling"); this brackets the true robot mass.
     add_base_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base_link"),
-            "mass_distribution_params": (1.0, 3.0),
+            "mass_distribution_params": (0.0, 0.3),
             "operation": "add",
         },
     )
@@ -86,8 +104,8 @@ class EventCfg:
         interval_range_s=(3.0, 6.0),
         params={
             "velocity_range": {
-                "x": (-0.7, 0.7),
-                "y": (-0.7, 0.7),
+                "x": (-0.4, 0.4),
+                "y": (-0.4, 0.4),
                 "roll": (-0.5, 0.5),
                 "pitch": (-0.5, 0.5),
                 "yaw": (-0.4, 0.4),
@@ -173,8 +191,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # wall in nav, so deployment cross-track steering alone reached B only
     # stochastically. 6 N pushes the policy to develop more lateral-holding
     # authority so the residual DART crab is smaller and reliably steerable to B.
-    lateral_bias_force = 6.0  # N, max |constant body-y push|
-    yaw_bias_torque = 0.4  # N*m, max |constant body-z (yaw) torque|
+    lateral_bias_force = 2.0  # v0.8: 6->2 N, right-sized to the 1.6 kg bot (6 N ~0.38g forced a skid)
+    yaw_bias_torque = 0.15  # v0.8: 0.4->0.15 N*m, right-sized to the real robot
     action_space = 12
     observation_space = 48
     state_space = 0
@@ -269,7 +287,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     joint_activity_reward_scale = -0.01  # PENALTY on mean|joint_vel| (issue #35): discourage fast joint motion
     gait_pattern_reward_scale = 2.0  # Deprecated: replaced by feet_air_time and alternating_gait
     feet_air_time_reward_scale = (
-        3.0  # lift bootstrap, raised (#46 follow-up: forward slide had ~0 lift, bring back real foot clearance)
+        4.0  # v0.6: 3->4 for a slower, more deliberate cadence (longer swings, fewer/cleaner steps)
     )
     crawl_gait_reward_scale = 8.0  # one foot swings at a time (spider crawl); #46: enforce one-at-a-time pattern
     foot_clearance_reward_scale = 6.0  # reference crawl: reward airborne foot reaching ~0.045 m clearance
@@ -301,4 +319,15 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     forward_progress_reward_scale = (
         4.0  # reduced 10->4 + cap 0.12: stop the "faster always pays" gradient so the gait creeps deliberately
     )
+    # v0.6 anti-slide redesign (training only, no URDF/limit changes):
+    # Foot-TIP stance-slip penalty (`foot_dragging` key; FK contact point, not the
+    # knee link). v0.5 showed -2.0 was too weak -- the policy slid and paid (tip slip
+    # stayed ~1.4-1.85x body speed). Raised to -4.0 so slide-and-pay stops winning.
+    foot_dragging_penalty_scale = -6.0  # v0.8: -4->-6 (now that grip is enabled + stepping taught, it can bite)
+    # DENSE forward-stride reward (v0.8): reward each AIRBORNE foot for its forward
+    # displacement from liftoff, every swing step (not just at touchdown). Still
+    # can't be earned by sweeping through contact (swing-gated) and position-based
+    # (won't push v0.6's fast-slide), but dense enough to steer the gait -- v0.7's
+    # touchdown-only was too sparse (logged ~0.045 at scale 60). Dense -> normal scale.
+    foot_stride_reward_scale = 6.0
     max_tilt_angle_deg = 40.0  # Reset threshold
