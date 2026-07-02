@@ -214,8 +214,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
 
     # IMU sensor: simulates the MPU6050 mounted 180° rotated on the carrier board.
     # The sensor frame is offset relative to base_link to match the visual STL
-    # centroid, and the 180° Z rotation is corrected in the env by negating X/Y
-    # (mirroring the real hardware bridge pipeline).
+    # centroid. The 180° Z rotation is baked into ImuCfg.OffsetCfg.rot, so
+    # imu.data.ang_vel_b / projected_gravity_b are already in the rotated frame.
     @configclass
     class BigBerthaSceneCfg(InteractiveSceneCfg):
         imu = ImuCfg(

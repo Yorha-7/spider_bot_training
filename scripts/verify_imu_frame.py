@@ -71,18 +71,20 @@ def main():
             env.step(actions)
 
             # Read quantities of interest
-            imu_raw = unwrapped.scene["imu"].data.ang_vel_b                     # rotated sensor frame: (-wx, -wy, wz)
-            imu_corrected = imu_raw * unwrapped._imu_negate                    # after current [-1,-1,1] -> (wx, wy, wz)
-            root_vel = unwrapped._robot.data.root_ang_vel_b                    # base frame: (wx, wy, wz)
+            imu_raw = unwrapped.scene["imu"].data.ang_vel_b  # rotated sensor frame: (-wx, -wy, wz)
+            imu_corrected = imu_raw * unwrapped._imu_negate  # after current [-1,-1,1] -> (wx, wy, wz)
+            root_vel = unwrapped._robot.data.root_ang_vel_b  # base frame: (wx, wy, wz)
 
             diff = (imu_corrected - root_vel).abs().max().item()
 
             if step % 10 == 0:
                 status = "IDENTICAL" if diff < 1e-6 else "DIFFERENT"
-                print(f"{step:6d}  {imu_raw.abs().max().item():>12.6f}  "
-                      f"{imu_corrected.abs().max().item():>13.6f}  "
-                      f"{root_vel.abs().max().item():>13.6f}  "
-                      f"{diff:>10.2e}  {status}")
+                print(
+                    f"{step:6d}  {imu_raw.abs().max().item():>12.6f}  "
+                    f"{imu_corrected.abs().max().item():>13.6f}  "
+                    f"{root_vel.abs().max().item():>13.6f}  "
+                    f"{diff:>10.2e}  {status}"
+                )
             step += 1
 
             if step >= 500:

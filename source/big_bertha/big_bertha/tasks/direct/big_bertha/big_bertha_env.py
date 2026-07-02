@@ -76,8 +76,10 @@ class BigberthaEnv(DirectRLEnv):
         # legs, which let the policy satisfy the gait reward with a pronk.)
         self._foot_pairs = [[0, 2], [1, 3]]  # [FR+RL, FL+RR] diagonals
 
-        # Correction factor for the 180° rotated IMU: negate X and Y (Z unchanged)
-        self._imu_negate = torch.tensor([-1.0, -1.0, 1.0], device=self.device)
+        # Identity negate — the ImuCfg offset.rot (180° about Z) already rotates
+        # the sensor frame, so imu.data.ang_vel_b / projected_gravity_b are
+        # reported in the rotated frame natively. No extra correction needed.
+        self._imu_negate = torch.tensor([1.0, 1.0, 1.0], device=self.device)
 
         # Logging
         self._episode_sums = {
@@ -149,9 +151,10 @@ class BigberthaEnv(DirectRLEnv):
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
-        # IMU sensor data: simulated MPU6050 with 180° Z rotation
+        # IMU sensor data: simulated MPU6050 with 180° Z rotation.
+        # ImuCfg offset rotates the sensor frame, so ang_vel_b is reported in
+        # the rotated frame natively (no extra correction needed).
         imu = self.scene["imu"]
-        # Negate X/Y — mirror the hardware bridge correction to base_link frame
         ang_vel_b = imu.data.ang_vel_b * self._imu_negate
         proj_gravity = imu.data.projected_gravity_b * self._imu_negate
         obs = torch.cat(
