@@ -20,8 +20,13 @@ pseudovectors (transform as (-ax, ay, -az)): the hip z-axis flips -> hip angle
 sign flips; the knee/ankle axes map onto the paired leg's axis exactly -> no
 sign flip.
 
-obs layout (48): lin_vel_b(3) ang_vel_b(3) projected_gravity(3) commands(3)
-                 joint_pos(12) joint_vel(12) prev_actions(12)
+obs layout (52): lin_vel_b(3) ang_vel_b(3) projected_gravity(3) commands(3)
+                 joint_pos(12) joint_vel(12) prev_actions(12) gait_clock(4)
+
+Gait clock (dims 48-51, feet order FR FL RL RR): mirroring swaps FR<->FL and
+RL<->RR, so the clock dims permute [49,48,51,50]. This maps onto a REACHABLE
+state because the wave offsets pair each swap partner exactly 0.5 cycles apart
+(a swap == a global +0.5 phase shift, and the initial phase is randomized).
 """
 
 from __future__ import annotations
@@ -54,6 +59,11 @@ def _mirror_obs(o: torch.Tensor, perm: torch.Tensor, sign: torch.Tensor) -> torc
     m[..., 12:24] = _mirror_joints(o[..., 12:24], perm, sign)  # joint_pos
     m[..., 24:36] = _mirror_joints(o[..., 24:36], perm, sign)  # joint_vel
     m[..., 36:48] = _mirror_joints(o[..., 36:48], perm, sign)  # prev_actions
+    if o.shape[-1] >= 52:  # gait clock (FR FL RL RR): swap FR<->FL, RL<->RR
+        m[..., 48] = o[..., 49]
+        m[..., 49] = o[..., 48]
+        m[..., 50] = o[..., 51]
+        m[..., 51] = o[..., 50]
     return m
 
 

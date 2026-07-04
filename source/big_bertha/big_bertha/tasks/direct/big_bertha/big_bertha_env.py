@@ -75,6 +75,14 @@ class BigberthaEnv(DirectRLEnv):
         # cannot be earned by sweeping the foot forward while in contact.
         self._foot_liftoff_pos = torch.zeros(self.num_envs, 4, 3, device=self.device)
         self._prev_contact = torch.ones(self.num_envs, 4, dtype=torch.bool, device=self.device)
+        # v0.9 gait clock: cycle phase in [0,1) advanced at cfg.gait_frequency, plus
+        # fixed per-foot offsets defining a WAVE crawl. Feet order = _feet_ids order
+        # [FR, FL, RL, RR]; offsets stagger the swing windows one-at-a-time
+        # (sequence RR -> FL -> RL -> FR over a cycle) and the FR/FL + RL/RR pairs
+        # differ by exactly 0.5, which keeps the mirror-symmetry augmentation valid
+        # (mirroring = swapping clock dims within each pair, see symmetry.py).
+        self._gait_phase = torch.zeros(self.num_envs, device=self.device)
+        self._gait_offsets = torch.tensor([0.0, 0.5, 0.25, 0.75], device=self.device)
         self._die_body_ids, _ = self._contact_sensor.find_bodies(["arm_a_1_1", "arm_a_2_1", "arm_a_3_1", "arm_a_4_1"])
         # Articulation base index + buffers for the SUSTAINED lateral-bias DR: a
         # constant body-frame sideways force + yaw torque held for the whole
@@ -112,7 +120,8 @@ class BigberthaEnv(DirectRLEnv):
                 "base_height",
                 "joint_activity",
                 "feet_air_time",
-                "crawl_gait",
+                "gait_stance_still",
+                "gait_swing_unload",
                 "foot_clearance",
                 "multi_swing_pen",
                 "track_ang_vel_z_exp",
@@ -122,7 +131,6 @@ class BigberthaEnv(DirectRLEnv):
                 "stand_still_pen",
                 "forward_progress",
                 "foot_dragging",
-                "foot_stride",
             ]
         }
 
@@ -144,6 +152,8 @@ class BigberthaEnv(DirectRLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: torch.Tensor):
+        # Advance the gait clock once per policy step (50 Hz).
+        self._gait_phase = (self._gait_phase + self.cfg.gait_frequency * self.step_dt) % 1.0
         self._actions = torch.clamp(actions.clone(), -1.0, 1.0)
         self._processed_actions = self.cfg.action_scale * self._actions + self._robot.data.default_joint_pos
         # Action (joint-target) noise: the deployed gazebo joints track the
@@ -175,6 +185,11 @@ class BigberthaEnv(DirectRLEnv):
         imu = self.scene["imu"]
         ang_vel_b = imu.data.ang_vel_b * self._imu_negate
         proj_gravity = imu.data.projected_gravity_b * self._imu_negate
+        # v0.9 gait-clock observation (4 dims, appended LAST): sin of each foot's
+        # cycle phase. The policy must know the schedule to comply with the phase
+        # rewards (Siekmann/WTW). Deployment: the policy node generates the same
+        # clock from time (freq + offsets are constants of the contract).
+        clock = torch.sin(2.0 * torch.pi * ((self._gait_phase.unsqueeze(1) + self._gait_offsets.unsqueeze(0)) % 1.0))
         obs = torch.cat(
             [
                 tensor
@@ -186,6 +201,7 @@ class BigberthaEnv(DirectRLEnv):
                     self._robot.data.joint_pos - self._robot.data.default_joint_pos,
                     self._robot.data.joint_vel,
                     self._actions,
+                    clock,
                 )
                 if tensor is not None
             ],
@@ -201,7 +217,7 @@ class BigberthaEnv(DirectRLEnv):
         # clean Isaac signal. Commands/prev_actions are exact (zero noise).
         if self._obs_noise_std is None:
             self._obs_noise_std = torch.tensor(
-                [0.10] * 3 + [0.20] * 3 + [0.12] * 3 + [0.0] * 3 + [0.03] * 12 + [0.6] * 12 + [0.0] * 12,
+                [0.10] * 3 + [0.20] * 3 + [0.12] * 3 + [0.0] * 3 + [0.03] * 12 + [0.6] * 12 + [0.0] * 12 + [0.0] * 4,
                 device=self.device,
             )
         obs = obs + torch.randn_like(obs) * self._obs_noise_std
@@ -221,7 +237,12 @@ class BigberthaEnv(DirectRLEnv):
         # mean ~0, std 0.045. sigma^2=0.1 makes standing clearly sub-optimal
         # (~0.05 at the mean command) so the policy must actually move.
         lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b[:, :2]), dim=1)
-        lin_vel_reward = torch.exp(-lin_vel_error / 0.1)
+        # sigma^2 0.1 -> 0.04 (v0.9.1): with the slow command range (vx mean 0.06)
+        # standing still only cost ~3.5% of this term, so the clock-schedule
+        # "march in place" was near-optimal and fwd progress flatlined for 12k
+        # iters. At 0.04 standing at the mean command costs ~9%, restoring a real
+        # translation gradient while the clock keeps the feet honest.
+        lin_vel_reward = torch.exp(-lin_vel_error / 0.04)
         # Forward progress — body-frame x velocity, rewarded LINEARLY (no
         # saturation at standstill, unlike the exp term). With forward-only
         # commands this guarantees moving always beats standing, breaking the
@@ -304,7 +325,11 @@ class BigberthaEnv(DirectRLEnv):
         # in Gazebo the body settles lower (DART contact), and a too-peaky term
         # made z<0.06 fully out-of-distribution -> the policy pronked. Tolerate
         # 0.06-0.12 while still peaking at the 0.09 Isaac standing height.
-        base_height_reward = torch.exp(-torch.square((base_height - 0.20) / 0.035))
+        # 0.09 = the measured Isaac standing height of the new URDF (base settles
+        # 0.075-0.093). A 0.20 target (introduced in 242a463) is unreachable for
+        # this robot and silently zeroed the whole term (logged 0.0006 for a full
+        # run); restored to the measured height.
+        base_height_reward = torch.exp(-torch.square((base_height - 0.09) / 0.035))
 
         # Joint activity reward - encourage using all joints
         joint_vel_magnitude = torch.sum(torch.abs(self._robot.data.joint_vel), dim=1)
@@ -316,21 +341,11 @@ class BigberthaEnv(DirectRLEnv):
         feet_air_time = torch.clamp(feet_air_time, max=1.5)  # slow deliberate swings last longer
         feet_air_time_reward = torch.mean(feet_air_time, dim=1)
 
-        # B) Crawl / wave gait reward — spider-like single-leg sequence: exactly
-        # ONE foot in a sustained swing at a time while the other three stay
-        # planted, cycling through all four legs. Sharpened for the reference
-        # deliberate wave: n_swing counts feet airborne >60 ms (kills 2-3 step
-        # micro-flicks); `single` is a near-BINARY gate (=1 only at exactly one
-        # swinging foot, 0 for 2+); lead_air pays a longer (0.45 s) deliberate
-        # swing; fwd_gate saturates within the new slow command (cap 0.12).
+        # B) Multi-swing guard (the wave schedule below owns the one-at-a-time
+        # sequencing now; the old contact-gated crawl_gait reward is retired -- it
+        # was satisfiable by the sliding equilibrium).
         feet_air_c = self._contact_sensor.data.current_air_time[:, self._feet_ids]
         n_swing = (feet_air_c > 0.06).float().sum(dim=1)  # genuinely-sustained swings
-        lead_air = torch.clamp(feet_air_c.max(dim=1).values, max=0.45) / 0.45  # 0..1
-        single = (n_swing == 1.0).float()  # exactly one airborne foot (else 0)
-        fwd_gate = torch.clamp(fwd_vel / 0.10, 0.0, 1.0)
-        crawl_gait_reward = lead_air * single * fwd_gate
-        # Hard penalty for 2+ feet airborne (trot/pronk) -> enforce the 3-foot
-        # support tripod (stance duty ~0.75) the reference crawl requires.
         multi_swing_pen = torch.clamp(n_swing - 1.0, min=0.0)
 
         # C) Swing-foot CLEARANCE — the missing HEIGHT signal. Air TIME alone
@@ -364,25 +379,31 @@ class BigberthaEnv(DirectRLEnv):
         # D) Stance-slip penalty: a PLANTED tip must not skid (grip the ground).
         foot_dragging = torch.sum(torch.norm(tip_vel_xy, dim=2) * in_contact, dim=1)
 
-        # E) DENSE forward-stride reward (v0.8): reward each AIRBORNE foot for its
-        # forward displacement FROM LIFTOFF (body-heading dir, clamped). It is
-        # position-based (not velocity, so unlike v0.6 it won't push an aggressive
-        # fast-slide) and SWING-gated (so, unlike a contact-time reward, it cannot
-        # be earned by sweeping the foot forward through contact). v0.7's
-        # touchdown-only variant was too SPARSE to steer the gait (logged ~0.045);
-        # rewarding it every swing step makes it strong enough to actually drive
-        # planting the foot ahead = a real step. tip_pos = link_pos + R*offset (FK).
-        tip_pos = self._robot.data.body_pos_w[:, self._feet_body_ids, :] + r_tip  # (N,4,3) world tip
-        cur_contact = feet_air_c < 0.001  # (N,4) bool
-        liftoff = self._prev_contact & (~cur_contact)  # foot just left the ground
-        self._foot_liftoff_pos = torch.where(liftoff.unsqueeze(-1), tip_pos, self._foot_liftoff_pos)
-        fwd_w = quat_apply(self._robot.data.root_quat_w, self._x_unit)[:, :2]  # (N,2) heading in world
-        fwd_w = fwd_w / (torch.norm(fwd_w, dim=1, keepdim=True) + 1e-6)
-        step_disp = (tip_pos - self._foot_liftoff_pos)[..., :2]  # (N,4,2) liftoff->now
-        stride_fwd = torch.sum(step_disp * fwd_w[:, None, :], dim=2)  # (N,4) fwd displacement (m)
-        fwd_cmd_gate = (self._commands[:, 0] > 0.05).float()  # (N,)
-        foot_stride = torch.sum(torch.clamp(stride_fwd, 0.0, 0.12) * swinging, dim=1) * fwd_cmd_gate
-        self._prev_contact = cur_contact
+        # E) GAIT-CLOCK phase rewards (v0.9, Siekmann ICRA'21 / Walk-These-Ways).
+        # Every contact-gated shaping term (v0.5-v0.8) converged to the sliding
+        # equilibrium because the policy had no phase signal: nothing ever said
+        # "THIS foot must be still NOW". A wave-gait clock (phase phi + per-foot
+        # offsets, also fed to the policy as observations) assigns each foot
+        # stance/swing windows:
+        #   stance window -> reward a STILL foot TIP (kills both slip and the
+        #     blade-edge rolling contact: the only way to hold the tip still while
+        #     loaded is a non-rolling, tip-down leg configuration, which is inside
+        #     the action range at calf ~2.0);
+        #   swing window  -> reward ZERO contact force (the foot must genuinely
+        #     unload and lift; dragging through contact scores nothing).
+        # Full-stop commands force all-stance (clean standing).
+        p_foot = (self._gait_phase.unsqueeze(1) + self._gait_offsets.unsqueeze(0)) % 1.0  # (N,4)
+        in_stance_sched = torch.sigmoid((self.cfg.gait_stance_ratio - p_foot) * 60.0)  # ~1 stance, ~0 swing
+        stop_cmd = (
+            (torch.abs(self._commands[:, 0]) < 0.02)
+            & (torch.abs(self._commands[:, 1]) < 0.02)
+            & (torch.abs(self._commands[:, 2]) < 0.05)
+        ).float().unsqueeze(1)
+        in_stance_sched = torch.maximum(in_stance_sched, stop_cmd)
+        tip_speed = torch.norm(tip_vel_xy, dim=2)  # (N,4) true contact-point speed
+        gait_stance_still = torch.sum(in_stance_sched * torch.exp(-torch.square(tip_speed) / 0.02), dim=1)
+        foot_forces = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)  # (N,4)
+        gait_swing_unload = torch.sum((1.0 - in_stance_sched) * torch.exp(-torch.square(foot_forces) / 25.0), dim=1)
 
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_reward * self.cfg.lin_vel_reward_scale * self.step_dt,
@@ -396,7 +417,8 @@ class BigberthaEnv(DirectRLEnv):
             "base_height": base_height_reward * self.cfg.base_height_reward_scale * self.step_dt,
             "joint_activity": joint_activity * self.cfg.joint_activity_reward_scale * self.step_dt,
             "feet_air_time": feet_air_time_reward * self.cfg.feet_air_time_reward_scale * self.step_dt,
-            "crawl_gait": crawl_gait_reward * self.cfg.crawl_gait_reward_scale * self.step_dt,
+            "gait_stance_still": gait_stance_still * self.cfg.gait_stance_still_reward_scale * self.step_dt,
+            "gait_swing_unload": gait_swing_unload * self.cfg.gait_swing_unload_reward_scale * self.step_dt,
             "foot_clearance": foot_clearance_reward * self.cfg.foot_clearance_reward_scale * self.step_dt,
             "multi_swing_pen": multi_swing_pen * self.cfg.multi_swing_penalty_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_reward * self.cfg.yaw_rate_reward_scale * self.step_dt,
@@ -406,7 +428,6 @@ class BigberthaEnv(DirectRLEnv):
             "stand_still_pen": stand_still_pen * self.cfg.stand_still_penalty_scale * self.step_dt,
             "forward_progress": forward_progress * self.cfg.forward_progress_reward_scale * self.step_dt,
             "foot_dragging": foot_dragging * self.cfg.foot_dragging_penalty_scale * self.step_dt,
-            "foot_stride": foot_stride * self.cfg.foot_stride_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -441,6 +462,10 @@ class BigberthaEnv(DirectRLEnv):
         # any touchdown -> no stale stride on the first landing after reset).
         self._prev_contact[env_ids] = True
         self._foot_liftoff_pos[env_ids] = 0.0
+        # Random initial gait phase: desynchronizes envs and makes every global
+        # phase shift reachable (also required for the mirror augmentation to map
+        # onto reachable states).
+        self._gait_phase[env_ids] = torch.rand(len(env_ids), device=self.device)
         # Sample new velocity commands. Forward-biased curriculum: the demo
         # drives the robot forward, so x is mostly positive (up to 0.6 m/s, which
         # brackets the 0.3 m/s demo command), with modest lateral and yaw for
