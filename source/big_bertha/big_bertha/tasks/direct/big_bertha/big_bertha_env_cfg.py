@@ -194,7 +194,12 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     lateral_bias_force = 2.0  # v0.8: 6->2 N, right-sized to the 1.6 kg bot (6 N ~0.38g forced a skid)
     yaw_bias_torque = 0.15  # v0.8: 0.4->0.15 N*m, right-sized to the real robot
     action_space = 12
-    observation_space = 48
+    observation_space = 52  # v0.9: 48 + 4 gait-clock dims (sin per foot, appended last)
+    # v0.9 gait clock (wave crawl): cycle frequency + stance duty. 0.667 Hz =
+    # 1.5 s cycle -> 0.375 s swings, a deliberate one-foot-at-a-time wave with
+    # 3 feet nominally planted (stance ratio 0.75). Offsets live in the env.
+    gait_frequency = 0.667
+    gait_stance_ratio = 0.75
     state_space = 0
 
     # simulation
@@ -287,9 +292,13 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     joint_activity_reward_scale = -0.01  # PENALTY on mean|joint_vel| (issue #35): discourage fast joint motion
     gait_pattern_reward_scale = 2.0  # Deprecated: replaced by feet_air_time and alternating_gait
     feet_air_time_reward_scale = (
-        4.0  # v0.6: 3->4 for a slower, more deliberate cadence (longer swings, fewer/cleaner steps)
+        1.0  # v0.9: 4->1, the gait-clock schedule owns swing timing now (kept as a small lift bootstrap)
     )
-    crawl_gait_reward_scale = 8.0  # one foot swings at a time (spider crawl); #46: enforce one-at-a-time pattern
+    # v0.9 gait-clock phase rewards (replace crawl_gait + foot_stride; Siekmann /
+    # Walk-These-Ways): stance window -> still foot TIP (kills slip AND the
+    # blade-edge rolling); swing window -> zero contact force (must truly unload).
+    gait_stance_still_reward_scale = 6.0
+    gait_swing_unload_reward_scale = 4.0
     foot_clearance_reward_scale = 6.0  # reference crawl: reward airborne foot reaching ~0.045 m clearance
     multi_swing_penalty_scale = -2.0  # penalize 2+ feet airborne (trot/pronk) -> enforce 3-foot support tripod
     yaw_rate_reward_scale = (
@@ -317,17 +326,16 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # the gait holds position on a zero command (the post-goal drift fix, training side).
     stand_still_penalty_scale = -6.0
     forward_progress_reward_scale = (
-        4.0  # reduced 10->4 + cap 0.12: stop the "faster always pays" gradient so the gait creeps deliberately
+        8.0  # v0.9.1: 4->8 (still capped at 0.12). The clock run marched in place
+        # for 12k iters -- schedule compliance out-earned translating. Doubling the
+        # linear moving-always-pays term (plus the sharper lin_vel sigma) makes
+        # walking clearly beat marching while the cap keeps the crawl deliberate.
     )
     # v0.6 anti-slide redesign (training only, no URDF/limit changes):
     # Foot-TIP stance-slip penalty (`foot_dragging` key; FK contact point, not the
     # knee link). v0.5 showed -2.0 was too weak -- the policy slid and paid (tip slip
     # stayed ~1.4-1.85x body speed). Raised to -4.0 so slide-and-pay stops winning.
-    foot_dragging_penalty_scale = -6.0  # v0.8: -4->-6 (now that grip is enabled + stepping taught, it can bite)
-    # DENSE forward-stride reward (v0.8): reward each AIRBORNE foot for its forward
-    # displacement from liftoff, every swing step (not just at touchdown). Still
-    # can't be earned by sweeping through contact (swing-gated) and position-based
-    # (won't push v0.6's fast-slide), but dense enough to steer the gait -- v0.7's
-    # touchdown-only was too sparse (logged ~0.045 at scale 60). Dense -> normal scale.
-    foot_stride_reward_scale = 6.0
+    # Kept SMALL as an always-on auxiliary + a comparable metric across runs
+    # (WTW keeps its slip penalty tiny too; the clock terms do the real work).
+    foot_dragging_penalty_scale = -0.5
     max_tilt_angle_deg = 40.0  # Reset threshold
