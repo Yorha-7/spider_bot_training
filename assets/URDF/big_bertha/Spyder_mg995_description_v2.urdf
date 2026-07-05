@@ -567,22 +567,22 @@
       </geometry>
     </collision>
     <visual>
-      <origin xyz="-0.016 -0.0175 -0.050" rpy="0 1.57 0" />
+      <origin xyz="0 -0.011 -0.014" rpy="0 3.14 0" />
       <geometry>
         <mesh filename="./meshes/servo_mg995.stl" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
-      <origin xyz="-0.016 -0.0175 -0.050" rpy="0 1.57 0" />
+      <origin xyz="0 -0.011 -0.0135" rpy="0 3.14 0" />
       <geometry>
         <mesh filename="./meshes/servo_mg995.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <inertial>
       <mass value="0.063683" />
-      <origin xyz="0.00147195 -0.02070390 -0.04658450" rpy="0 0 0" />
-      <inertia ixx="0.00003503" ixy="-0.00000263" ixz="0.00000240" iyy="0.00001551" iyz="0.00000427" izz="0.00003589" />
+      <origin xyz="-0.00122688 -0.01509018 -0.03204986" rpy="0 0 0" />
+      <inertia ixx="0.00003849" ixy="-0.00000237" ixz="0.00000067" iyy="0.00001083" iyz="0.00000147" izz="0.00003347" />
     </inertial>
   </link>
   <link name="battery_link">
