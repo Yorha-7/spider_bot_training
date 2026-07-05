@@ -120,6 +120,7 @@ class BigberthaEnv(DirectRLEnv):
                 "base_height",
                 "joint_activity",
                 "feet_air_time",
+                "crawl_gait",
                 "gait_stance_still",
                 "gait_swing_unload",
                 "foot_clearance",
@@ -341,11 +342,17 @@ class BigberthaEnv(DirectRLEnv):
         feet_air_time = torch.clamp(feet_air_time, max=1.5)  # slow deliberate swings last longer
         feet_air_time_reward = torch.mean(feet_air_time, dim=1)
 
-        # B) Multi-swing guard (the wave schedule below owns the one-at-a-time
-        # sequencing now; the old contact-gated crawl_gait reward is retired -- it
-        # was satisfiable by the sliding equilibrium).
+        # B) Crawl / wave gait reward + multi-swing guard. The clock schedule (E)
+        # owns strict sequencing, but crawl_gait is kept as reinforcement of the
+        # spider crawl style: exactly ONE sustained swing while moving forward,
+        # with a long deliberate lead swing. (Runs at half its historic weight so
+        # the strict, non-gameable clock terms stay dominant.)
         feet_air_c = self._contact_sensor.data.current_air_time[:, self._feet_ids]
         n_swing = (feet_air_c > 0.06).float().sum(dim=1)  # genuinely-sustained swings
+        lead_air = torch.clamp(feet_air_c.max(dim=1).values, max=0.45) / 0.45  # 0..1
+        single = (n_swing == 1.0).float()  # exactly one airborne foot (else 0)
+        fwd_gate = torch.clamp(fwd_vel / 0.10, 0.0, 1.0)
+        crawl_gait_reward = lead_air * single * fwd_gate
         multi_swing_pen = torch.clamp(n_swing - 1.0, min=0.0)
 
         # C) Swing-foot CLEARANCE — the missing HEIGHT signal. Air TIME alone
@@ -417,6 +424,7 @@ class BigberthaEnv(DirectRLEnv):
             "base_height": base_height_reward * self.cfg.base_height_reward_scale * self.step_dt,
             "joint_activity": joint_activity * self.cfg.joint_activity_reward_scale * self.step_dt,
             "feet_air_time": feet_air_time_reward * self.cfg.feet_air_time_reward_scale * self.step_dt,
+            "crawl_gait": crawl_gait_reward * self.cfg.crawl_gait_reward_scale * self.step_dt,
             "gait_stance_still": gait_stance_still * self.cfg.gait_stance_still_reward_scale * self.step_dt,
             "gait_swing_unload": gait_swing_unload * self.cfg.gait_swing_unload_reward_scale * self.step_dt,
             "foot_clearance": foot_clearance_reward * self.cfg.foot_clearance_reward_scale * self.step_dt,
