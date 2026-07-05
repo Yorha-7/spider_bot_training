@@ -40,6 +40,17 @@ _FRIC_HIGH = os.environ.get("BB_FRICTION_FLOOR", "high").lower() != "low"
 _STATIC_FRIC_RANGE = (1.0, 2.0) if _FRIC_HIGH else (0.25, 2.0)
 _DYNAMIC_FRIC_RANGE = (0.9, 1.6) if _FRIC_HIGH else (0.2, 1.6)
 
+# CLEAN-EVAL toggle (BB_EVAL_CLEAN=1): for demo GIFs / metric evals. Training-time
+# domain randomization stays active in the play scripts by default, so a 1-env
+# recording can land a slippery per-episode friction draw, get shoved every 3-6 s,
+# and carries the constant lateral-bias push -- all of which exaggerate gait flaws
+# that are NOT the policy's fault. With this flag: friction pinned to the nominal
+# 1.0, no pushes, no bias forces. Use for every recorded GIF and slip measurement.
+_EVAL_CLEAN = os.environ.get("BB_EVAL_CLEAN", "0") == "1"
+if _EVAL_CLEAN:
+    _STATIC_FRIC_RANGE = (1.0, 1.0)
+    _DYNAMIC_FRIC_RANGE = (1.0, 1.0)
+
 
 @configclass
 class EventCfg:
@@ -88,7 +99,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base_link"),
-            "mass_distribution_params": (0.0, 0.3),
+            "mass_distribution_params": (0.0, 0.3) if not _EVAL_CLEAN else (0.0, 0.0),
             "operation": "add",
         },
     )
@@ -101,14 +112,14 @@ class EventCfg:
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(3.0, 6.0),
+        interval_range_s=(3.0, 6.0) if not _EVAL_CLEAN else (10000.0, 10001.0),
         params={
             "velocity_range": {
-                "x": (-0.4, 0.4),
-                "y": (-0.4, 0.4),
-                "roll": (-0.5, 0.5),
-                "pitch": (-0.5, 0.5),
-                "yaw": (-0.4, 0.4),
+                "x": (-0.4, 0.4) if not _EVAL_CLEAN else (0.0, 0.0),
+                "y": (-0.4, 0.4) if not _EVAL_CLEAN else (0.0, 0.0),
+                "roll": (-0.5, 0.5) if not _EVAL_CLEAN else (0.0, 0.0),
+                "pitch": (-0.5, 0.5) if not _EVAL_CLEAN else (0.0, 0.0),
+                "yaw": (-0.4, 0.4) if not _EVAL_CLEAN else (0.0, 0.0),
             }
         },
     )
@@ -125,8 +136,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_(110|113|116|119)"),
-            "stiffness_distribution_params": (0.6, 1.4),
-            "damping_distribution_params": (0.5, 2.0),
+            "stiffness_distribution_params": (0.6, 1.4) if not _EVAL_CLEAN else (1.0, 1.0),
+            "damping_distribution_params": (0.5, 2.0) if not _EVAL_CLEAN else (1.0, 1.0),
             "operation": "scale",
             "distribution": "log_uniform",
         },
@@ -136,8 +147,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_(111|114|117|120)"),
-            "stiffness_distribution_params": (0.6, 1.4),
-            "damping_distribution_params": (0.5, 2.0),
+            "stiffness_distribution_params": (0.6, 1.4) if not _EVAL_CLEAN else (1.0, 1.0),
+            "damping_distribution_params": (0.5, 2.0) if not _EVAL_CLEAN else (1.0, 1.0),
             "operation": "scale",
             "distribution": "log_uniform",
         },
@@ -147,8 +158,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_(112|115|118|121)"),
-            "stiffness_distribution_params": (0.6, 1.4),
-            "damping_distribution_params": (0.5, 2.0),
+            "stiffness_distribution_params": (0.6, 1.4) if not _EVAL_CLEAN else (1.0, 1.0),
+            "damping_distribution_params": (0.5, 2.0) if not _EVAL_CLEAN else (1.0, 1.0),
             "operation": "scale",
             "distribution": "log_uniform",
         },
@@ -161,8 +172,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_.*"),
-            "friction_distribution_params": (0.0, 0.05),
-            "armature_distribution_params": (0.0, 0.01),
+            "friction_distribution_params": (0.0, 0.05) if not _EVAL_CLEAN else (0.0, 0.0),
+            "armature_distribution_params": (0.0, 0.01) if not _EVAL_CLEAN else (0.0, 0.0),
             "operation": "add",
         },
     )
@@ -177,7 +188,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # stability, matches gazebo 500 Hz). Policy stays 50 Hz (step_dt 0.02) either.
     decimation = _DECIMATION
     action_scale = 0.25
-    action_noise_std = 0.05  # rad noise on joint targets (sim-to-sim actuator robustness)
+    action_noise_std = 0.05 if not _EVAL_CLEAN else 0.0  # rad target noise; 0 in clean eval
     # SUSTAINED lateral-bias DR (sim-to-sim crab fix): a constant body-frame
     # sideways force + yaw torque, randomized per-episode in [-v, v] and held for
     # the whole episode (applied in big_bertha_env._pre_physics_step). Unlike the
@@ -191,8 +202,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # wall in nav, so deployment cross-track steering alone reached B only
     # stochastically. 6 N pushes the policy to develop more lateral-holding
     # authority so the residual DART crab is smaller and reliably steerable to B.
-    lateral_bias_force = 2.0  # v0.8: 6->2 N, right-sized to the 1.6 kg bot (6 N ~0.38g forced a skid)
-    yaw_bias_torque = 0.15  # v0.8: 0.4->0.15 N*m, right-sized to the real robot
+    lateral_bias_force = 2.0 if not _EVAL_CLEAN else 0.0  # v0.8: 6->2 N right-sized; 0 in clean eval
+    yaw_bias_torque = 0.15 if not _EVAL_CLEAN else 0.0  # v0.8 right-sized; 0 in clean eval
     action_space = 12
     observation_space = 52  # v0.9: 48 + 4 gait-clock dims (sin per foot, appended last)
     # v0.9 gait clock (wave crawl): cycle frequency + stance duty. 0.667 Hz =
