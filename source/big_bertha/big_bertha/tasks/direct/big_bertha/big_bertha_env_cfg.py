@@ -305,9 +305,14 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     feet_air_time_reward_scale = (
         1.0  # v0.9: 4->1, the gait-clock schedule owns swing timing now (kept as a small lift bootstrap)
     )
-    # v0.9 gait-clock phase rewards (replace crawl_gait + foot_stride; Siekmann /
-    # Walk-These-Ways): stance window -> still foot TIP (kills slip AND the
-    # blade-edge rolling); swing window -> zero contact force (must truly unload).
+    # Crawl style reinforcement: exactly one sustained swing while moving, long
+    # deliberate lead swing. Restored at HALF the historic 8.0 so it reinforces
+    # the crawl look without out-shouting the strict clock terms below (this
+    # air-time version is satisfiable while sliding; the clock terms are not).
+    crawl_gait_reward_scale = 4.0
+    # v0.9 gait-clock phase rewards (Siekmann / Walk-These-Ways): stance window ->
+    # still foot TIP (kills slip AND the blade-edge rolling); swing window ->
+    # zero contact force (must truly unload).
     gait_stance_still_reward_scale = 6.0
     gait_swing_unload_reward_scale = 4.0
     foot_clearance_reward_scale = 6.0  # reference crawl: reward airborne foot reaching ~0.045 m clearance
