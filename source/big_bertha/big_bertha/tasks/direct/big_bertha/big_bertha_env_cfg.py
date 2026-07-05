@@ -28,7 +28,7 @@ from isaaclab.utils import configclass
 # BB_ACTUATOR env var. Explicit IdealPD needs dt 1/500 (decimation 10) for
 # stability (kp*dt^2/I ~ 1.4, = gazebo's 500 Hz); implicit runs the native 1/200
 # (decimation 4), 2.5x faster. The policy stays 50 Hz either way (step_dt 0.02).
-_EXPLICIT = os.environ.get("BB_ACTUATOR", "implicit").lower() == "explicit"
+_EXPLICIT = os.environ.get("BB_ACTUATOR", "explicit").lower() == "explicit"
 _SIM_DT = 1 / 500 if _EXPLICIT else 1 / 200
 _DECIMATION = 10 if _EXPLICIT else 4
 
