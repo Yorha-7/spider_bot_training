@@ -236,13 +236,15 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # robot
     robot: ArticulationCfg = BIG_BERTHA_CFG.replace(prim_path="/World/envs/env_.*/Robot")
 
-    # Default world-fixed camera so the user can orbit/zoom/pan freely in the
-    # viewport (not locked to the robot's frame). zoom out in the viewport to
-    # see the full robot or use --video for a headless follow-cam GIF render.
+    # Close follow-camera for the 1-env play.py --video walking GIF (zoomed in on
+    # the robot). origin_type="asset_root" locks it onto the robot so it tracks
+    # the gait; eye is the camera offset (m) and lookat the target. Headless
+    # training never renders, so this has zero effect on training.
     viewer: ViewerCfg = ViewerCfg(
         eye=(1.4, 1.4, 0.8),
         lookat=(0.0, 0.0, 0.12),
-        origin_type="world",
+        origin_type="asset_root",
+        asset_name="robot",
         resolution=(1280, 720),
     )
 
