@@ -481,9 +481,9 @@
       </geometry>
     </collision>
     <inertial>
-      <mass value="0.063683" />
-      <origin xyz="-0.00152593 -0.01415894 -0.02679154" rpy="0 0 0" />
-      <inertia ixx="0.00003860" ixy="-0.00000290" ixz="-0.00000068" iyy="0.00001100" iyz="-0.00000123" izz="0.00003402" />
+      <mass value="0.063687" />
+      <origin xyz="-0.00152686 -0.01416578 -0.02679160" rpy="0 0 0" />
+      <inertia ixx="0.00003866" ixy="-0.00000290" ixz="-0.00000068" iyy="0.00001100" iyz="-0.00000123" izz="0.00003408" />
     </inertial>
   </link>
   <link name="arm_c_4_1">
@@ -514,9 +514,9 @@
       </geometry>
     </collision>
     <inertial>
-      <mass value="0.063683" />
-      <origin xyz="-0.00152593 -0.01415894 -0.02679154" rpy="0 0 0" />
-      <inertia ixx="0.00003860" ixy="-0.00000290" ixz="-0.00000068" iyy="0.00001100" iyz="-0.00000123" izz="0.00003402" />
+      <mass value="0.063687" />
+      <origin xyz="-0.00152686 -0.01416578 -0.02679160" rpy="0 0 0" />
+      <inertia ixx="0.00003866" ixy="-0.00000290" ixz="-0.00000068" iyy="0.00001100" iyz="-0.00000123" izz="0.00003408" />
     </inertial>
   </link>
   <link name="arm_c_2_1">
@@ -534,22 +534,22 @@
       </geometry>
     </collision>
     <visual>
-      <origin xyz="0 -0.01 -0.045" rpy="0 0 0" />
+      <origin xyz="0 -0.011 -0.014" rpy="0 3.14 0" />
       <geometry>
         <mesh filename="./meshes/servo_mg995.stl" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="silver" />
     </visual>
     <collision>
-      <origin xyz="0 -0.01 -0.045" rpy="0 0 0" />
+      <origin xyz="0 -0.011 -0.0135" rpy="0 3.14 0" />
       <geometry>
         <mesh filename="./meshes/servo_mg995.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <inertial>
-      <mass value="0.063683" />
-      <origin xyz="-0.00125322 -0.01422653 -0.02573588" rpy="0 0 0" />
-      <inertia ixx="0.00003850" ixy="-0.00000244" ixz="0.00000015" iyy="0.00001034" iyz="-0.00000049" izz="0.00003396" />
+      <mass value="0.063687" />
+      <origin xyz="-0.00122772 -0.01509700 -0.03204975" rpy="0 0 0" />
+      <inertia ixx="0.00003854" ixy="-0.00000238" ixz="0.00000067" iyy="0.00001083" iyz="0.00000147" izz="0.00003352" />
     </inertial>
   </link>
   <link name="arm_c_3_1">
@@ -580,9 +580,9 @@
       </geometry>
     </collision>
     <inertial>
-      <mass value="0.063683" />
-      <origin xyz="-0.00122688 -0.01509018 -0.03204986" rpy="0 0 0" />
-      <inertia ixx="0.00003849" ixy="-0.00000237" ixz="0.00000067" iyy="0.00001083" iyz="0.00000147" izz="0.00003347" />
+      <mass value="0.063687" />
+      <origin xyz="-0.00122772 -0.01509700 -0.03204975" rpy="0 0 0" />
+      <inertia ixx="0.00003854" ixy="-0.00000238" ixz="0.00000067" iyy="0.00001083" iyz="0.00000147" izz="0.00003352" />
     </inertial>
   </link>
   <link name="battery_link">
@@ -676,15 +676,15 @@
       </geometry>
     </collision>
     <visual>
-      <origin xyz="-0.015 0.018 -0.002" rpy="1.57 0 1.57" />
+      <origin xyz="0 0.018 0.012" rpy="0 0 1.57" />
       <geometry>
-        <mesh filename="./meshes/mpu6050.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/MPU_9250.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </visual>
     <collision>
-      <origin xyz="-0.015 0.018 -0.002" rpy="1.57 0 1.57" />
+      <origin xyz="0 0.018 0.012" rpy="0 0 1.57" />
       <geometry>
-        <mesh filename="./meshes/mpu6050.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/MPU_9250.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
@@ -806,8 +806,8 @@
     </collision>
     <inertial>
       <mass value="0.138015" />
-      <origin xyz="0.02068512 -0.00214141 0.01888206" rpy="0 0 0" />
-      <inertia ixx="0.00009594" ixy="-0.00001011" ixz="-0.00000305" iyy="0.00023207" iyz="-0.00000249" izz="0.00024815" />
+      <origin xyz="0.02066488 -0.00224629 0.01891372" rpy="0 0 0" />
+      <inertia ixx="0.00009520" ixy="-0.00001035" ixz="-0.00000298" iyy="0.00023211" iyz="-0.00000273" izz="0.00024761" />
     </inertial>
   </link>
   <link name="ydlidar_link">
