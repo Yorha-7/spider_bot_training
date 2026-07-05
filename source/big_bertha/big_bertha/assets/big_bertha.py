@@ -37,7 +37,7 @@ _HIP_JOINTS = ["Revolute_110", "Revolute_113", "Revolute_116", "Revolute_119"]
 _THIGH_JOINTS = ["Revolute_111", "Revolute_114", "Revolute_117", "Revolute_120"]
 _CALF_JOINTS = ["Revolute_112", "Revolute_115", "Revolute_118", "Revolute_121"]
 
-if os.environ.get("BB_ACTUATOR", "implicit").lower() == "explicit":
+if os.environ.get("BB_ACTUATOR", "explicit").lower() == "explicit":
     _HIP_ACT = IdealPDActuatorCfg(
         joint_names_expr=_HIP_JOINTS,
         effort_limit=1.18,
