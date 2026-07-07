@@ -408,9 +408,20 @@ class BigberthaEnv(DirectRLEnv):
         ).float().unsqueeze(1)
         in_stance_sched = torch.maximum(in_stance_sched, stop_cmd)
         tip_speed = torch.norm(tip_vel_xy, dim=2)  # (N,4) true contact-point speed
-        gait_stance_still = torch.sum(in_stance_sched * torch.exp(-torch.square(tip_speed) / 0.02), dim=1)
+        # Velocity-ratio gate (v1.0.1): when commanded FORWARD, the clock rewards
+        # pay only in proportion to achieved/commanded speed. Ungated they paid in
+        # full while marching in place (~16/s of free reward), and the torque-
+        # limited explicit policy parked there: fwd_progress sat dead flat at
+        # ~0.10 from iter 1k to 22k. On stop commands the gate is 1 (standing
+        # still IS the task there, all-stance via stop_cmd above).
+        vel_gate = torch.where(
+            self._commands[:, 0] > 0.05,
+            torch.clamp(fwd_vel / torch.clamp(self._commands[:, 0], min=0.05), 0.0, 1.0),
+            torch.ones_like(fwd_vel),
+        ).unsqueeze(1)
+        gait_stance_still = torch.sum(vel_gate * in_stance_sched * torch.exp(-torch.square(tip_speed) / 0.02), dim=1)
         foot_forces = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)  # (N,4)
-        gait_swing_unload = torch.sum((1.0 - in_stance_sched) * torch.exp(-torch.square(foot_forces) / 25.0), dim=1)
+        gait_swing_unload = torch.sum(vel_gate * (1.0 - in_stance_sched) * torch.exp(-torch.square(foot_forces) / 25.0), dim=1)
 
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_reward * self.cfg.lin_vel_reward_scale * self.step_dt,
