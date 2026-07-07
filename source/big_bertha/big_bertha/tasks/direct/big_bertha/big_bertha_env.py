@@ -80,8 +80,6 @@ class BigberthaEnv(DirectRLEnv):
         # the sensor frame, so imu.data.ang_vel_b / projected_gravity_b are
         # reported in the rotated frame natively. No extra correction needed.
         self._imu_negate = torch.tensor([1.0, 1.0, 1.0], device=self.device)
-        # Convert base_link quantities to IMU frame (180° Z rotation: X/Y flip).
-        self._base_to_imu = torch.tensor([-1.0, -1.0, 1.0], device=self.device)
 
         # Logging
         self._episode_sums = {
@@ -153,23 +151,20 @@ class BigberthaEnv(DirectRLEnv):
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
-        # All directional quantities converted to the IMU frame (180° Z rotation
-        # relative to base_link). IMU data (ang_vel_b, proj_gravity) is already
-        # in this frame natively from ImuCfg offset; root_lin_vel_b and commands
-        # are rotated here so the entire observation uses a single frame.
+        # IMU sensor data: simulated MPU6050 with 180° Z rotation.
+        # ImuCfg offset rotates the sensor frame, so ang_vel_b is reported in
+        # the rotated frame natively (no extra correction needed).
         imu = self.scene["imu"]
         ang_vel_b = imu.data.ang_vel_b * self._imu_negate
         proj_gravity = imu.data.projected_gravity_b * self._imu_negate
-        lin_vel_b = self._robot.data.root_lin_vel_b * self._base_to_imu
-        cmd = self._commands * self._base_to_imu
         obs = torch.cat(
             [
                 tensor
                 for tensor in (
-                    lin_vel_b,
+                    self._robot.data.root_lin_vel_b,
                     ang_vel_b,
                     proj_gravity,
-                    cmd,
+                    self._commands,
                     self._robot.data.joint_pos - self._robot.data.default_joint_pos,
                     self._robot.data.joint_vel,
                     self._actions,
@@ -199,8 +194,6 @@ class BigberthaEnv(DirectRLEnv):
         imu = self.scene["imu"]
         ang_vel_b = imu.data.ang_vel_b * self._imu_negate
         proj_gravity = imu.data.projected_gravity_b * self._imu_negate
-        lin_vel_b = self._robot.data.root_lin_vel_b * self._base_to_imu
-        cmd = self._commands * self._base_to_imu
 
         # Linear velocity tracking — SHARP Gaussian on the xy command error.
         # sigma^2 was 0.25, which is far too lenient for the small forward
@@ -209,32 +202,32 @@ class BigberthaEnv(DirectRLEnv):
         # rewards) and never translated -- the trained linvel_x distribution was
         # mean ~0, std 0.045. sigma^2=0.1 makes standing clearly sub-optimal
         # (~0.05 at the mean command) so the policy must actually move.
-        lin_vel_error = torch.sum(torch.square(cmd[:, :2] - lin_vel_b[:, :2]), dim=1)
+        lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b[:, :2]), dim=1)
         lin_vel_reward = torch.exp(-lin_vel_error / 0.1)
         # Forward progress — body-frame x velocity, rewarded LINEARLY (no
         # saturation at standstill, unlike the exp term). With forward-only
         # commands this guarantees moving always beats standing, breaking the
         # shuffle-in-place local optimum. Gated on a forward command.
-        fwd_vel = lin_vel_b[:, 0]
+        fwd_vel = self._robot.data.root_lin_vel_b[:, 0]
         forward_progress = torch.where(
-            cmd[:, 0] > 0.05,
+            self._commands[:, 0] > 0.05,
             torch.clamp(fwd_vel, min=0.0, max=0.12),  # deliberate creep: no "faster pays" above 0.12
             torch.zeros_like(fwd_vel),
         )
         # z velocity tracking
-        z_vel_error = torch.square(lin_vel_b[:, 2])
+        z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
         # angular velocity x/y
         ang_vel_error = torch.sum(torch.square(ang_vel_b[:, :2]), dim=1)
         # yaw rate tracking — sharp Gaussian on the yaw-rate error, same shape as
         # lin_vel. No 1/|cmd|^2 blow-up (that term reached 13-22 in training and
         # made spinning the dominant reward).
-        yaw_rate_error = torch.square(cmd[:, 2] - ang_vel_b[:, 2])
+        yaw_rate_error = torch.square(self._commands[:, 2] - ang_vel_b[:, 2])
         yaw_reward = torch.exp(-yaw_rate_error / 0.1)
         # LINEAR yaw-progress: reward yaw rate achieved in the COMMANDED
         # direction, capped at |cmd|, with no saturation -- so turning always
         # beats not turning (the exp term above is flat at large error and gave
         # the policy no reason to commit to a turn). Gated on a real yaw command.
-        cmd_yaw = cmd[:, 2]
+        cmd_yaw = self._commands[:, 2]
         ach_yaw = ang_vel_b[:, 2]
         yaw_progress = torch.where(
             torch.abs(cmd_yaw) > 0.1,
@@ -251,17 +244,17 @@ class BigberthaEnv(DirectRLEnv):
         # analogue of yaw_straight_pen and is the direct cure for the systematic
         # PhysX->DART sideways/right drift -- the soft exp lin_vel tracking does
         # not punish a steady slip hard enough.
-        lat_straight_gate = (torch.abs(cmd[:, 1]) < 0.02).float()
-        lat_straight_pen = torch.square(lin_vel_b[:, 1]) * lat_straight_gate
+        lat_straight_gate = (torch.abs(self._commands[:, 1]) < 0.02).float()
+        lat_straight_pen = torch.square(self._robot.data.root_lin_vel_b[:, 1]) * lat_straight_gate
         # Stand-still: when commanded to FULLY stop (vx~0, vy~0, wz~0), penalize
         # the body's forward velocity so the gait holds position on a zero command
         # instead of creeping forward -- the source of the post-goal drift in DART.
         stand_gate = (
-            (torch.abs(cmd[:, 0]) < 0.02)
-            & (torch.abs(cmd[:, 1]) < 0.02)
-            & (torch.abs(cmd[:, 2]) < 0.05)
+            (torch.abs(self._commands[:, 0]) < 0.02)
+            & (torch.abs(self._commands[:, 1]) < 0.02)
+            & (torch.abs(self._commands[:, 2]) < 0.05)
         ).float()
-        stand_still_pen = torch.square(lin_vel_b[:, 0]) * stand_gate
+        stand_still_pen = torch.square(self._robot.data.root_lin_vel_b[:, 0]) * stand_gate
         # joint torques
         joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
         # joint acceleration
