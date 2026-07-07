@@ -76,9 +76,8 @@ class BigberthaEnv(DirectRLEnv):
         # legs, which let the policy satisfy the gait reward with a pronk.)
         self._foot_pairs = [[0, 2], [1, 3]]  # [FR+RL, FL+RR] diagonals
 
-        # Identity negate — the ImuCfg offset.rot (180° about Z) already rotates
-        # the sensor frame, so imu.data.ang_vel_b / projected_gravity_b are
-        # reported in the rotated frame natively. No extra correction needed.
+        # Identity negate — ImuCfg offset is identity, so sensor frame =
+        # base_link and IMU data is already in base_link frame natively.
         self._imu_negate = torch.tensor([1.0, 1.0, 1.0], device=self.device)
 
         # Logging

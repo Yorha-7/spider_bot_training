@@ -212,17 +212,16 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
         track_air_time=True,
     )
 
-    # IMU sensor: simulates the MPU6050 mounted 180° rotated on the carrier board.
-    # The sensor frame is offset relative to base_link to match the visual STL
-    # centroid. The 180° Z rotation is baked into ImuCfg.OffsetCfg.rot, so
-    # imu.data.ang_vel_b / projected_gravity_b are already in the rotated frame.
+    # IMU sensor at the MPU6050 mesh centroid. Identity orientation so the
+    # sensor frame matches base_link — imu.data.ang_vel_b / projected_gravity_b
+    # are reported in base_link frame natively.
     @configclass
     class BigBerthaSceneCfg(InteractiveSceneCfg):
         imu = ImuCfg(
             prim_path="{ENV_REGEX_NS}/Robot/base_link",
             offset=ImuCfg.OffsetCfg(
                 pos=(0.063460, -0.064057, 0.072712),  # MPU6050 mesh centroid in base_link
-                rot=(0.0, 0.0, 0.0, 1.0),  # 180° about Z: q(w,x,y,z)
+                rot=(1.0, 0.0, 0.0, 0.0),  # identity: sensor frame = base_link
             ),
             gravity_bias=(0.0, 0.0, 0.0),
         )
