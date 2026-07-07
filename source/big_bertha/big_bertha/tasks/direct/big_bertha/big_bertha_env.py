@@ -257,9 +257,7 @@ class BigberthaEnv(DirectRLEnv):
         # the body's forward velocity so the gait holds position on a zero command
         # instead of creeping forward -- the source of the post-goal drift in DART.
         stand_gate = (
-            (torch.abs(cmd[:, 0]) < 0.02)
-            & (torch.abs(cmd[:, 1]) < 0.02)
-            & (torch.abs(cmd[:, 2]) < 0.05)
+            (torch.abs(cmd[:, 0]) < 0.02) & (torch.abs(cmd[:, 1]) < 0.02) & (torch.abs(cmd[:, 2]) < 0.05)
         ).float()
         stand_still_pen = torch.square(lin_vel_b[:, 0]) * stand_gate
         # joint torques
