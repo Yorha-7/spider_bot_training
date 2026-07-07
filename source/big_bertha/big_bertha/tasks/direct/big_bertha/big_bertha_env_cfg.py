@@ -178,8 +178,13 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="Revolute_.*"),
-            "friction_distribution_params": (0.0, 0.05) if not _EVAL_CLEAN else (0.0, 0.0),
-            "armature_distribution_params": (0.0, 0.01) if not _EVAL_CLEAN else (0.0, 0.0),
+            # Distribution CENTERS in clean eval. Zero armature/Coulomb (the old pin) made
+            # the explicit PD unstable (kp*dt^2/I blows up as reflected inertia -> 0): all
+            # legs oscillated and the robot collapsed from spawn (23 resets/6 s); with the
+            # centers it walks reset-free. Training samples these per-joint, so the
+            # all-joints-zero corner never occurs in training.
+            "friction_distribution_params": (0.0, 0.05) if not _EVAL_CLEAN else (0.025, 0.025),
+            "armature_distribution_params": (0.0, 0.01) if not _EVAL_CLEAN else (0.005, 0.005),
             "operation": "add",
         },
     )
