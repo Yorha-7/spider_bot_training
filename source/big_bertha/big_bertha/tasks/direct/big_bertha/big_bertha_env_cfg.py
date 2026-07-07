@@ -48,8 +48,14 @@ _DYNAMIC_FRIC_RANGE = (0.9, 1.6) if _FRIC_HIGH else (0.2, 1.6)
 # 1.0, no pushes, no bias forces. Use for every recorded GIF and slip measurement.
 _EVAL_CLEAN = os.environ.get("BB_EVAL_CLEAN", "0") == "1"
 if _EVAL_CLEAN:
-    _STATIC_FRIC_RANGE = (1.0, 1.0)
-    _DYNAMIC_FRIC_RANGE = (1.0, 1.0)
+    # Pin at the TRAINING-DISTRIBUTION CENTERS, not nominal edges. Pinning
+    # friction to 1.0 (the low edge) and added mass to 0 (below the always-added
+    # 0-0.3 kg) put playback OUT of distribution: a policy that never balanced a
+    # bare-mass base died every ~13 steps (23 resets/6 s) while the same
+    # checkpoint walked reset-free with training DR on. Clean eval must mean
+    # "typical conditions, no randomness", not "minimal conditions".
+    _STATIC_FRIC_RANGE = (1.5, 1.5)
+    _DYNAMIC_FRIC_RANGE = (1.25, 1.25)
 
 
 @configclass
@@ -99,7 +105,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base_link"),
-            "mass_distribution_params": (0.0, 0.3) if not _EVAL_CLEAN else (0.0, 0.0),
+            "mass_distribution_params": (0.0, 0.3) if not _EVAL_CLEAN else (0.15, 0.15),
             "operation": "add",
         },
     )
