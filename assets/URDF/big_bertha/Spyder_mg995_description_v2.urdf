@@ -678,13 +678,13 @@
     <visual>
       <origin xyz="0 0.018 0.012" rpy="0 0 1.57" />
       <geometry>
-        <mesh filename="./meshes/MPU_9250.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/MPU_9265.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </visual>
     <collision>
       <origin xyz="0 0.018 0.012" rpy="0 0 1.57" />
       <geometry>
-        <mesh filename="./meshes/MPU_9250.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="./meshes/MPU_9265.stl" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
     <visual>
