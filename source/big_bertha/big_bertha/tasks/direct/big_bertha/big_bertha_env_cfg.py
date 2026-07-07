@@ -221,7 +221,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
         imu = ImuCfg(
             prim_path="{ENV_REGEX_NS}/Robot/base_link",
             offset=ImuCfg.OffsetCfg(
-                pos=(0.063460, -0.094057, 0.092712),  # MPU6050 mesh centroid in base_link
+                pos=(0.063460, -0.064057, 0.072712),  # MPU6050 mesh centroid in base_link
                 rot=(0.0, 0.0, 0.0, 1.0),  # 180° about Z: q(w,x,y,z)
             ),
             gravity_bias=(0.0, 0.0, 0.0),
