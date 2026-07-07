@@ -126,7 +126,12 @@ class BigberthaEnv(DirectRLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self._actions = torch.clamp(actions.clone(), -1.0, 1.0)
-        self._processed_actions = self.cfg.action_scale * self._actions + self._robot.data.default_joint_pos
+        # Action EMA smoothing: blend raw policy output with previous actions before
+        # sending to joints. Only the joint target is smoothed — self._actions (used
+        # in the observation as "previous actions") stays raw so the policy sees its
+        # own unfiltered output and can learn to compensate for the filter.
+        smoothed = 0.3 * self._actions + 0.7 * self._previous_actions
+        self._processed_actions = self.cfg.action_scale * smoothed + self._robot.data.default_joint_pos
         # Action (joint-target) noise: the deployed gazebo joints track the
         # position targets through an explicit effort-PD that overshoots/lags
         # vs Isaac's implicit actuator, so the realised joint trajectory differs
