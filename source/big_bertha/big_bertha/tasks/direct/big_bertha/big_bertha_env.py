@@ -10,6 +10,8 @@ from __future__ import annotations
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
+import os
+
 import gymnasium as gym
 import torch
 
@@ -36,11 +38,20 @@ class BigberthaEnv(DirectRLEnv):
 
         # X/Y linear velocity + yaw angular velocity commands
         self._commands = torch.zeros(self.num_envs, 3, device=self.device)
-        # Optional fixed-command override (shape (3,) [vx, vy, omega]). When set
-        # (e.g. by play_fixed_vel.py), _reset_idx applies it INSTEAD of sampling
-        # random commands, so explicit zero commands keep the robot stationary
-        # instead of inheriting a random forward command on every reset (#40).
+        # Optional fixed-command override (shape (3,) [vx, vy, omega]). When set,
+        # _reset_idx applies it INSTEAD of sampling random commands. For demo GIF
+        # recordings: canonical play.py samples a RANDOM command per episode, and
+        # the wide yaw range (+/-0.8) often lands a hard-turn command that looks
+        # like marching/shuffling in place (the robot is actually arcing, not
+        # walking straight). Set BB_FIXED_CMD="vx,vy,yaw" (e.g. "0.10,0,0") to pin
+        # a clean forward command for a legible walking GIF. Unset = normal
+        # random-command training (zero training impact).
         self._command_override = None
+        _fixed_cmd = os.environ.get("BB_FIXED_CMD")
+        if _fixed_cmd:
+            self._command_override = torch.tensor(
+                [float(x) for x in _fixed_cmd.split(",")], device=self.device
+            )
 
         # Per-dim observation noise std (lazily built on device in _get_observations)
         self._obs_noise_std = None
