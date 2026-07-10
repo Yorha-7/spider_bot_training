@@ -419,16 +419,27 @@ class BigberthaEnv(DirectRLEnv):
         ).float().unsqueeze(1)
         in_stance_sched = torch.maximum(in_stance_sched, stop_cmd)
         tip_speed = torch.norm(tip_vel_xy, dim=2)  # (N,4) true contact-point speed
-        # Velocity-ratio gate (v1.0.1): when commanded FORWARD, the clock rewards
-        # pay only in proportion to achieved/commanded speed. Ungated they paid in
-        # full while marching in place (~16/s of free reward), and the torque-
-        # limited explicit policy parked there: fwd_progress sat dead flat at
-        # ~0.10 from iter 1k to 22k. On stop commands the gate is 1 (standing
-        # still IS the task there, all-stance via stop_cmd above).
+        # TASK gate (v1.1.2): the clock rewards (~10 total) pay only in proportion
+        # to how well the robot is doing the COMMANDED task. Forward command ->
+        # forward-speed ratio; turn-in-place command (vx~0, |yaw|>0.1) -> YAW-rate
+        # ratio; stop -> 1.
+        #   v1.0.1 only had the forward branch and defaulted the gate to 1.0 for
+        #   everything else. So on a turn-in-place command the policy collected the
+        #   FULL clock reward by marching in place WITHOUT turning -- the clock
+        #   reward (10) dwarfs the yaw reward (~4), so it never paid to actually
+        #   rotate. Measured: 0.005 rad/s achieved vs 0.6 commanded. Gating the
+        #   clock by yaw progress makes marching-without-turning score ~0, so the
+        #   only way to earn the clock reward under a turn command is to turn.
+        fwd_ratio = torch.clamp(fwd_vel / torch.clamp(self._commands[:, 0], min=0.05), 0.0, 1.0)
+        yaw_ratio = torch.clamp(
+            ach_yaw * torch.sign(cmd_yaw) / torch.clamp(torch.abs(cmd_yaw), min=0.1), 0.0, 1.0
+        )
+        is_forward = self._commands[:, 0] > 0.05
+        is_turn_in_place = (torch.abs(self._commands[:, 0]) < 0.05) & (torch.abs(cmd_yaw) > 0.1)
         vel_gate = torch.where(
-            self._commands[:, 0] > 0.05,
-            torch.clamp(fwd_vel / torch.clamp(self._commands[:, 0], min=0.05), 0.0, 1.0),
-            torch.ones_like(fwd_vel),
+            is_forward,
+            fwd_ratio,
+            torch.where(is_turn_in_place, yaw_ratio, torch.ones_like(fwd_vel)),
         ).unsqueeze(1)
         gait_stance_still = torch.sum(vel_gate * in_stance_sched * torch.exp(-torch.square(tip_speed) / 0.02), dim=1)
         foot_forces = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)  # (N,4)
