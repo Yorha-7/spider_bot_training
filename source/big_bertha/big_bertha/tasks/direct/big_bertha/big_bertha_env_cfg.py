@@ -338,7 +338,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # for yaw rate achieved in the commanded direction (capped at |cmd|), giving
     # a non-saturating gradient to actually turn -- the same trick that broke the
     # shuffle-in-place optimum for forward_progress.
-    yaw_progress_reward_scale = 3.0  # 2.0->3.0: commit harder to turns for Nav2's sharp obstacle-avoidance
+    yaw_progress_reward_scale = 6.0  # v1.1.2: 3->6, help yaw beat the clock reward during turn-in-place
     # Anti-drift: when commanded ~straight (|cmd_yaw|<0.1) penalize any yaw rate,
     # so the policy holds heading instead of curving (kills the systematic
     # right-drift at the source rather than relying on the deployment heading
