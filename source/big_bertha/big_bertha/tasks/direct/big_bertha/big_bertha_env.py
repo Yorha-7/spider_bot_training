@@ -520,6 +520,23 @@ class BigberthaEnv(DirectRLEnv):
         # in-place turns directly (the missing "hard turn" that left the robot
         # unable to escape obstacles); removes the policy-node yaw clamp workaround.
         self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.8, 0.8)
+        # TURN-IN-PLACE category (v1.1.1): 30% of envs are commanded to rotate in
+        # place -- vx=0, vy=0, strong yaw (+/-0.3..0.8). The independent sampling
+        # above almost never produces a clean in-place turn (vx ~ uniform 0-0.12,
+        # so nearly always creeping forward), so the policy learned to ARC but not
+        # pivot -- measured 0.005 rad/s achieved vs 0.6 commanded at iter 36k. The
+        # literature (legged_gym / Walk-These-Ways) is explicit that in-place
+        # turning is learned only by dedicating commands with zero linear velocity
+        # and non-zero yaw. The remaining 70% forward+steer preserves the (mature)
+        # forward gait, and fine-tuning from the forward checkpoint anchors it.
+        _n = len(env_ids)
+        _turn = torch.rand(_n, device=self.device) < 0.30
+        _sign = torch.where(torch.rand(_n, device=self.device) < 0.5, -1.0, 1.0)
+        _strong_yaw = torch.empty(_n, device=self.device).uniform_(0.3, 0.8) * _sign
+        z = torch.zeros_like(self._commands[env_ids, 0])
+        self._commands[env_ids, 0] = torch.where(_turn, z, self._commands[env_ids, 0])
+        self._commands[env_ids, 1] = torch.where(_turn, z, self._commands[env_ids, 1])
+        self._commands[env_ids, 2] = torch.where(_turn, _strong_yaw, self._commands[env_ids, 2])
         # Sample the per-episode SUSTAINED bias disturbance (sim-to-sim crab DR):
         # a constant body-frame lateral force + yaw torque held for the episode,
         # so the policy learns to actively hold its line/heading against a
