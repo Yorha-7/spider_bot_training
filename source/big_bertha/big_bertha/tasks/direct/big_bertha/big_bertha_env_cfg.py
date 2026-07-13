@@ -299,11 +299,11 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # thrashing) is removed; gait shaping kept but below lin_vel so a trot serves
     # forward motion rather than the reverse.
     lin_vel_reward_scale = 2.0  # exp velocity tracking; reduced (paid for standing, issue #46)
-    z_vel_reward_scale = -0.35  # Heave penalty (was -0.25): damp bounce that tilts the lidar into ghost walls
+    z_vel_reward_scale = -1.0  # v1.2A: -0.35->-1.0, kill the 9mm body bob (Phase-0 metric)
     ang_vel_reward_scale = -0.10  # Roll/pitch RATE penalty (was -0.05): flatter body keeps the lidar level
-    joint_torque_reward_scale = -1e-5  # Minimal torque penalty
+    joint_torque_reward_scale = -1e-4  # v1.2A: 10x, energy-efficiency (MG995 current) + smoother stance
     joint_accel_reward_scale = -1e-7  # Minimal acceleration penalty
-    action_rate_reward_scale = -0.01  # Action smoothness (stronger for a cleaner gait)
+    action_rate_reward_scale = -0.05  # v1.2A: 5x, smoother targets = less jitter, kinder sim-to-real
     flat_orientation_reward_scale = -2.0  # Static tilt penalty (was -1.5): keep the body lidar level
     joint_deviation_reward_scale = (
         -9.0
