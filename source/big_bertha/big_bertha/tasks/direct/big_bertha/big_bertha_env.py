@@ -341,7 +341,9 @@ class BigberthaEnv(DirectRLEnv):
         # 0.075-0.093). A 0.20 target (introduced in 242a463) is unreachable for
         # this robot and silently zeroed the whole term (logged 0.0006 for a full
         # run); restored to the measured height.
-        base_height_reward = torch.exp(-torch.square((base_height - 0.09) / 0.035))
+        # v1.2A: sigma 0.035->0.02 -- the wide band tolerated the 9mm bob; tighter
+        # band makes constant height actually pay.
+        base_height_reward = torch.exp(-torch.square((base_height - 0.09) / 0.02))
 
         # Joint activity reward - encourage using all joints
         joint_vel_magnitude = torch.sum(torch.abs(self._robot.data.joint_vel), dim=1)
