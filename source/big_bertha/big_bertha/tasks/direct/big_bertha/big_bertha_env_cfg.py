@@ -221,6 +221,9 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # 1.5 s cycle -> 0.375 s swings, a deliberate one-foot-at-a-time wave with
     # 3 feet nominally planted (stance ratio 0.75). Offsets live in the env.
     gait_frequency = 0.667
+    # v1.2F: clock speeds up with commanded yaw (see _pre_physics_step), so turns
+    # can be tracked by stepping instead of skidding.
+    turn_clock_boost = 0.8
     gait_stance_ratio = 0.75
     state_space = 0
 

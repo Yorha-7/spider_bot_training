@@ -165,8 +165,15 @@ class BigberthaEnv(DirectRLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: torch.Tensor):
-        # Advance the gait clock once per policy step (50 Hz).
-        self._gait_phase = (self._gait_phase + self.cfg.gait_frequency * self.step_dt) % 1.0
+        # Advance the gait clock once per policy step (50 Hz). v1.2F hybrid: the
+        # cadence SCALES UP with the commanded yaw (up to +80% at |yaw|>=0.4) --
+        # stepping yaw rate is cadence-limited (~0.2 rad/s at 0.667 Hz), so a
+        # faster clock during turns raises the steppable ceiling to ~0.3 rad/s,
+        # making the (now capped) turn commands physically trackable by STEPPING.
+        yaw_boost = 1.0 + self.cfg.turn_clock_boost * torch.clamp(
+            torch.abs(self._commands[:, 2]) / 0.4, max=1.0
+        )
+        self._gait_phase = (self._gait_phase + self.cfg.gait_frequency * yaw_boost * self.step_dt) % 1.0
         self._actions = torch.clamp(actions.clone(), -1.0, 1.0)
         self._processed_actions = self.cfg.action_scale * self._actions + self._robot.data.default_joint_pos
         # Action (joint-target) noise: the deployed gazebo joints track the
@@ -556,7 +563,10 @@ class BigberthaEnv(DirectRLEnv):
         # rotation for obstacle avoidance so the policy can execute Nav2's sharp
         # in-place turns directly (the missing "hard turn" that left the robot
         # unable to escape obstacles); removes the policy-node yaw clamp workaround.
-        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.8, 0.8)
+        # v1.2F: +/-0.8 -> +/-0.5. Stepping cannot track 0.8 rad/s at any cadence we
+        # run; infeasible commands teach skidding (measured: planted tips moved at
+        # exactly omega*r under the old range).
+        self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
         # TURN-IN-PLACE category (v1.1.1): 30% of envs are commanded to rotate in
         # place -- vx=0, vy=0, strong yaw (+/-0.3..0.8). The independent sampling
         # above almost never produces a clean in-place turn (vx ~ uniform 0-0.12,
@@ -569,7 +579,7 @@ class BigberthaEnv(DirectRLEnv):
         _n = len(env_ids)
         _turn = torch.rand(_n, device=self.device) < 0.30
         _sign = torch.where(torch.rand(_n, device=self.device) < 0.5, -1.0, 1.0)
-        _strong_yaw = torch.empty(_n, device=self.device).uniform_(0.3, 0.8) * _sign
+        _strong_yaw = torch.empty(_n, device=self.device).uniform_(0.15, 0.4) * _sign  # v1.2F: steppable range
         z = torch.zeros_like(self._commands[env_ids, 0])
         self._commands[env_ids, 0] = torch.where(_turn, z, self._commands[env_ids, 0])
         self._commands[env_ids, 1] = torch.where(_turn, z, self._commands[env_ids, 1])
