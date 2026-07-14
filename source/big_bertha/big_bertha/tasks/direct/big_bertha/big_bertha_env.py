@@ -143,6 +143,7 @@ class BigberthaEnv(DirectRLEnv):
                 "stand_still_pen",
                 "forward_progress",
                 "foot_dragging",
+                "yaw_stride",
             ]
         }
 
@@ -443,9 +444,31 @@ class BigberthaEnv(DirectRLEnv):
             fwd_ratio,
             torch.where(is_turn_in_place, yaw_ratio, torch.ones_like(fwd_vel)),
         ).unsqueeze(1)
-        gait_stance_still = torch.sum(vel_gate * in_stance_sched * torch.exp(-torch.square(tip_speed) / 0.02), dim=1)
+        # v1.2E: kernel sigma^2 0.02 -> 0.005. At skid-turn tip speeds (~0.06 m/s) the
+        # old kernel charged only ~16% of the clock reward, so skid-steering was the
+        # cheapest way to turn; now it costs ~51%, making stepping-turns win.
+        gait_stance_still = torch.sum(vel_gate * in_stance_sched * torch.exp(-torch.square(tip_speed) / 0.005), dim=1)
         foot_forces = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)  # (N,4)
         gait_swing_unload = torch.sum(vel_gate * (1.0 - in_stance_sched) * torch.exp(-torch.square(foot_forces) / 25.0), dim=1)
+
+        # F) TURN-BY-STEPPING (v1.2E, Raibert-in-spirit per Walk-These-Ways): during
+        # a turn-in-place command, reward each SWING foot for tangential displacement
+        # since liftoff (around the body center, in the commanded spin direction) --
+        # the rotational analogue of the v0.8 forward-stride reward that taught real
+        # forward stepping. Nothing previously told the policy WHERE to place feet
+        # for a turn, so it skidded them; this makes stepping-around the paid path.
+        tip_pos3 = self._robot.data.body_pos_w[:, self._feet_body_ids, :] + r_tip  # (N,4,3)
+        cur_contact = feet_air_c < 0.001
+        liftoff = self._prev_contact & (~cur_contact)
+        self._foot_liftoff_pos = torch.where(liftoff.unsqueeze(-1), tip_pos3, self._foot_liftoff_pos)
+        disp_xy = (tip_pos3 - self._foot_liftoff_pos)[..., :2]  # (N,4,2) since liftoff
+        r_xy = tip_pos3[..., :2] - self._robot.data.root_pos_w[:, None, :2]  # foot radius vec
+        t_hat = torch.stack([-r_xy[..., 1], r_xy[..., 0]], dim=-1)
+        t_hat = t_hat / (torch.norm(t_hat, dim=-1, keepdim=True) + 1e-6)
+        t_hat = t_hat * torch.sign(cmd_yaw)[:, None, None]  # spin direction
+        turn_gate = ((torch.abs(cmd_yaw) > 0.1) & (torch.abs(self._commands[:, 0]) < 0.05)).float()
+        yaw_stride = torch.sum(torch.clamp(torch.sum(disp_xy * t_hat, dim=2), 0.0, 0.10) * swinging, dim=1) * turn_gate
+        self._prev_contact = cur_contact
 
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_reward * self.cfg.lin_vel_reward_scale * self.step_dt,
@@ -462,6 +485,7 @@ class BigberthaEnv(DirectRLEnv):
             "crawl_gait": crawl_gait_reward * self.cfg.crawl_gait_reward_scale * self.step_dt,
             "gait_stance_still": gait_stance_still * self.cfg.gait_stance_still_reward_scale * self.step_dt,
             "gait_swing_unload": gait_swing_unload * self.cfg.gait_swing_unload_reward_scale * self.step_dt,
+            "yaw_stride": yaw_stride * self.cfg.yaw_stride_reward_scale * self.step_dt,
             "foot_clearance": foot_clearance_reward * self.cfg.foot_clearance_reward_scale * self.step_dt,
             "multi_swing_pen": multi_swing_pen * self.cfg.multi_swing_penalty_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_reward * self.cfg.yaw_rate_reward_scale * self.step_dt,

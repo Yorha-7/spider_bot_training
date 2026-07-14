@@ -326,6 +326,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # zero contact force (must truly unload).
     gait_stance_still_reward_scale = 6.0
     gait_swing_unload_reward_scale = 4.0
+    # v1.2E turn-by-stepping: tangential swing-stride during turn-in-place commands.
+    yaw_stride_reward_scale = 6.0
     foot_clearance_reward_scale = 6.0  # reference crawl: reward airborne foot reaching ~0.045 m clearance
     multi_swing_penalty_scale = -2.0  # penalize 2+ feet airborne (trot/pronk) -> enforce 3-foot support tripod
     yaw_rate_reward_scale = (
@@ -364,5 +366,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # stayed ~1.4-1.85x body speed). Raised to -4.0 so slide-and-pay stops winning.
     # Kept SMALL as an always-on auxiliary + a comparable metric across runs
     # (WTW keeps its slip penalty tiny too; the clock terms do the real work).
-    foot_dragging_penalty_scale = -0.5
+    # v1.2E: -0.5 -> -2.0, always-on planted-tip slip cost (Walk-These-Ways keeps a
+    # real feet-slip penalty; ours had decayed to a metric). Attacks skid in walk AND turn.
+    foot_dragging_penalty_scale = -2.0
     max_tilt_angle_deg = 40.0  # Reset threshold
