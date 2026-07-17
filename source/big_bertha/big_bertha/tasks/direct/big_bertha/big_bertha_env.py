@@ -273,7 +273,7 @@ class BigberthaEnv(DirectRLEnv):
         fwd_vel = self._robot.data.root_lin_vel_b[:, 0]
         forward_progress = torch.where(
             self._commands[:, 0] > 0.05,
-            torch.clamp(fwd_vel, min=0.0, max=0.12),  # deliberate creep: no "faster pays" above 0.12
+            torch.clamp(fwd_vel, min=0.0, max=0.18),  # v1.2G: cap 0.12->0.18, user wants a brisker walk (old explicit policy sustained 0.177 on MG995s)
             torch.zeros_like(fwd_vel),
         )
         # z velocity tracking
@@ -565,7 +565,7 @@ class BigberthaEnv(DirectRLEnv):
         # the policy learns to STAND (and turn in place when yaw is commanded)
         # instead of always creeping forward -- this also fixes the deployment
         # quirk where vx=0 was out-of-distribution and the robot walked anyway.
-        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.0, 0.12)
+        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.0, 0.18)  # v1.2G: 0.12->0.18
         self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.05, 0.05)
         # WIDER yaw (+/-0.15 -> +/-0.6 -> +/-0.8): teach real, HARD left/right
         # rotation for obstacle avoidance so the policy can execute Nav2's sharp
