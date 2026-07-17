@@ -329,8 +329,9 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # zero contact force (must truly unload).
     gait_stance_still_reward_scale = 6.0
     gait_swing_unload_reward_scale = 4.0
-    # v1.2E turn-by-stepping: tangential swing-stride during turn-in-place commands.
-    yaw_stride_reward_scale = 6.0
+    # v1.2G Raibert foothold: place swing feet at velocity/yaw-shifted targets
+    # (the literature-exact term; skid earns zero from it by construction).
+    raibert_reward_scale = 6.0
     foot_clearance_reward_scale = 6.0  # reference crawl: reward airborne foot reaching ~0.045 m clearance
     multi_swing_penalty_scale = -2.0  # penalize 2+ feet airborne (trot/pronk) -> enforce 3-foot support tripod
     yaw_rate_reward_scale = (
