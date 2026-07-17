@@ -19,7 +19,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor
-from isaaclab.utils.math import quat_apply
+from isaaclab.utils.math import quat_apply, quat_apply_inverse
 
 from .big_bertha_env_cfg import BigberthaEnvCfg
 
@@ -93,6 +93,9 @@ class BigberthaEnv(DirectRLEnv):
         # differ by exactly 0.5, which keeps the mirror-symmetry augmentation valid
         # (mirroring = swapping clock dims within each pair, see symmetry.py).
         self._gait_phase = torch.zeros(self.num_envs, device=self.device)
+        # v1.2G Raibert: neutral foot-tip xy in BODY frame, captured at the first
+        # reward step (all envs at default pose then). Basis for foothold targets.
+        self._foot_neutral_b = None
         self._gait_offsets = torch.tensor([0.0, 0.5, 0.25, 0.75], device=self.device)
         self._die_body_ids, _ = self._contact_sensor.find_bodies(["arm_a_1_1", "arm_a_2_1", "arm_a_3_1", "arm_a_4_1"])
         # Articulation base index + buffers for the SUSTAINED lateral-bias DR: a
@@ -143,7 +146,7 @@ class BigberthaEnv(DirectRLEnv):
                 "stand_still_pen",
                 "forward_progress",
                 "foot_dragging",
-                "yaw_stride",
+                "raibert",
             ]
         }
 
@@ -458,24 +461,29 @@ class BigberthaEnv(DirectRLEnv):
         foot_forces = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)  # (N,4)
         gait_swing_unload = torch.sum(vel_gate * (1.0 - in_stance_sched) * torch.exp(-torch.square(foot_forces) / 25.0), dim=1)
 
-        # F) TURN-BY-STEPPING (v1.2E, Raibert-in-spirit per Walk-These-Ways): during
-        # a turn-in-place command, reward each SWING foot for tangential displacement
-        # since liftoff (around the body center, in the commanded spin direction) --
-        # the rotational analogue of the v0.8 forward-stride reward that taught real
-        # forward stepping. Nothing previously told the policy WHERE to place feet
-        # for a turn, so it skidded them; this makes stepping-around the paid path.
+        # F) RAIBERT FOOTHOLD reward (v1.2G, the literature-exact form per
+        # Walk-These-Ways / Ask1): desired foothold = neutral position + 0.5 *
+        # T_stance * (v_cmd + omega_cmd x r). The yaw-induced tangential offset
+        # means that under a turn command the ONLY way to earn this term is to
+        # PLACE swing feet at the rotated targets -- skidding earns zero from it
+        # by construction. Also shapes forward stride placement (same formula,
+        # v_cmd term), attacking fwd slip + front/back duty with one term.
         tip_pos3 = self._robot.data.body_pos_w[:, self._feet_body_ids, :] + r_tip  # (N,4,3)
-        cur_contact = feet_air_c < 0.001
-        liftoff = self._prev_contact & (~cur_contact)
-        self._foot_liftoff_pos = torch.where(liftoff.unsqueeze(-1), tip_pos3, self._foot_liftoff_pos)
-        disp_xy = (tip_pos3 - self._foot_liftoff_pos)[..., :2]  # (N,4,2) since liftoff
-        r_xy = tip_pos3[..., :2] - self._robot.data.root_pos_w[:, None, :2]  # foot radius vec
-        t_hat = torch.stack([-r_xy[..., 1], r_xy[..., 0]], dim=-1)
-        t_hat = t_hat / (torch.norm(t_hat, dim=-1, keepdim=True) + 1e-6)
-        t_hat = t_hat * torch.sign(cmd_yaw)[:, None, None]  # spin direction
-        turn_gate = ((torch.abs(cmd_yaw) > 0.1) & (torch.abs(self._commands[:, 0]) < 0.05)).float()
-        yaw_stride = torch.sum(torch.clamp(torch.sum(disp_xy * t_hat, dim=2), 0.0, 0.10) * swinging, dim=1) * turn_gate
-        self._prev_contact = cur_contact
+        root_q = self._robot.data.root_quat_w
+        rel = tip_pos3 - self._robot.data.root_pos_w[:, None, :]
+        tips_b = quat_apply_inverse(root_q.unsqueeze(1).expand(-1, 4, -1), rel)[..., :2]  # (N,4,2)
+        if self._foot_neutral_b is None:
+            self._foot_neutral_b = tips_b.mean(dim=0).detach().clone()  # (4,2) default-pose tips
+        f_eff = self.cfg.gait_frequency * (
+            1.0 + self.cfg.turn_clock_boost * torch.clamp(torch.abs(cmd_yaw) / 0.4, max=1.0)
+        )
+        k_r = (0.5 * self.cfg.gait_stance_ratio / f_eff).view(-1, 1, 1)  # (N,1,1) half stance time
+        neu = self._foot_neutral_b.unsqueeze(0)  # (1,4,2)
+        tang = torch.stack([-neu[..., 1], neu[..., 0]], dim=-1)  # z_hat x r per foot
+        off = k_r * (self._commands[:, :2].unsqueeze(1) + cmd_yaw.view(-1, 1, 1) * tang)
+        p_des = neu + torch.clamp(off, -0.06, 0.06)  # offsets bounded to foot workspace
+        err2 = torch.sum(torch.square(tips_b - p_des), dim=-1)  # (N,4)
+        raibert = torch.sum(torch.exp(-err2 / 0.01) * swinging, dim=1)
 
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_reward * self.cfg.lin_vel_reward_scale * self.step_dt,
@@ -492,7 +500,7 @@ class BigberthaEnv(DirectRLEnv):
             "crawl_gait": crawl_gait_reward * self.cfg.crawl_gait_reward_scale * self.step_dt,
             "gait_stance_still": gait_stance_still * self.cfg.gait_stance_still_reward_scale * self.step_dt,
             "gait_swing_unload": gait_swing_unload * self.cfg.gait_swing_unload_reward_scale * self.step_dt,
-            "yaw_stride": yaw_stride * self.cfg.yaw_stride_reward_scale * self.step_dt,
+            "raibert": raibert * self.cfg.raibert_reward_scale * self.step_dt,
             "foot_clearance": foot_clearance_reward * self.cfg.foot_clearance_reward_scale * self.step_dt,
             "multi_swing_pen": multi_swing_pen * self.cfg.multi_swing_penalty_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_reward * self.cfg.yaw_rate_reward_scale * self.step_dt,
