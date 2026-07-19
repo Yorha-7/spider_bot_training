@@ -224,6 +224,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # v1.2F: clock speeds up with commanded yaw (see _pre_physics_step), so turns
     # can be tracked by stepping instead of skidding.
     turn_clock_boost = 0.8
+    # v1.3: cadence scales with commanded speed (up to ~1.4 Hz at 0.3 m/s).
+    speed_clock_boost = 1.1
     gait_stance_ratio = 0.75
     state_space = 0
 
@@ -307,7 +309,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     joint_torque_reward_scale = -1e-4  # v1.2A: 10x, energy-efficiency (MG995 current) + smoother stance
     joint_accel_reward_scale = -1e-7  # Minimal acceleration penalty
     action_rate_reward_scale = -0.05  # v1.2A: 5x, smoother targets = less jitter, kinder sim-to-real
-    flat_orientation_reward_scale = -2.0  # Static tilt penalty (was -1.5): keep the body lidar level
+    flat_orientation_reward_scale = -3.0  # v1.3: firmer level-body (lidar)  # Static tilt penalty (was -1.5): keep the body lidar level
     joint_deviation_reward_scale = (
         -9.0
     )  # anti-sprawl on HIP joints only (idx 0,3,6,9); -1.0 full-joint was ~8x too weak vs crawl_gait and did nothing
