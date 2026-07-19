@@ -173,10 +173,14 @@ class BigberthaEnv(DirectRLEnv):
         # stepping yaw rate is cadence-limited (~0.2 rad/s at 0.667 Hz), so a
         # faster clock during turns raises the steppable ceiling to ~0.3 rad/s,
         # making the (now capped) turn commands physically trackable by STEPPING.
-        yaw_boost = 1.0 + self.cfg.turn_clock_boost * torch.clamp(
-            torch.abs(self._commands[:, 2]) / 0.4, max=1.0
-        )
-        self._gait_phase = (self._gait_phase + self.cfg.gait_frequency * yaw_boost * self.step_dt) % 1.0
+        # v1.3: cadence also scales with commanded SPEED (wave crawl at 0.667 Hz
+        # caps body speed ~0.13 m/s; faster clock = more steps/s = faster walk).
+        boost = (
+            1.0
+            + self.cfg.turn_clock_boost * torch.clamp(torch.abs(self._commands[:, 2]) / 0.4, max=1.0)
+            + self.cfg.speed_clock_boost * torch.clamp(self._commands[:, 0] / 0.3, max=1.0)
+        ).clamp(max=2.1)
+        self._gait_phase = (self._gait_phase + self.cfg.gait_frequency * boost * self.step_dt) % 1.0
         self._actions = torch.clamp(actions.clone(), -1.0, 1.0)
         self._processed_actions = self.cfg.action_scale * self._actions + self._robot.data.default_joint_pos
         # Action (joint-target) noise: the deployed gazebo joints track the
@@ -273,13 +277,16 @@ class BigberthaEnv(DirectRLEnv):
         fwd_vel = self._robot.data.root_lin_vel_b[:, 0]
         forward_progress = torch.where(
             self._commands[:, 0] > 0.05,
-            torch.clamp(fwd_vel, min=0.0, max=0.18),  # v1.2G: cap 0.12->0.18, user wants a brisker walk (old explicit policy sustained 0.177 on MG995s)
+            torch.clamp(fwd_vel, min=0.0, max=0.40),  # v1.3: speed program
             torch.zeros_like(fwd_vel),
         )
         # z velocity tracking
         z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
         # angular velocity x/y
-        ang_vel_error = torch.sum(torch.square(ang_vel_b[:, :2]), dim=1)
+        # v1.3: 3x roll/pitch-rate weight DURING TURNS -- kills the tilt spikes
+        # (max ~10 deg) that would smear the lidar pointcloud in bringup.
+        turn_active = (torch.abs(self._commands[:, 2]) > 0.1).float()
+        ang_vel_error = torch.sum(torch.square(ang_vel_b[:, :2]), dim=1) * (1.0 + 2.0 * turn_active)
         # yaw rate tracking — sharp Gaussian on the yaw-rate error, same shape as
         # lin_vel. No 1/|cmd|^2 blow-up (that term reached 13-22 in training and
         # made spinning the dominant reward).
@@ -394,7 +401,17 @@ class BigberthaEnv(DirectRLEnv):
         # best-case swing height) so all four feet are paid to clear the ground.
         feet_z = self._robot.data.body_pos_w[:, self._feet_body_ids, 2]  # (N,4) world z
         swinging = (feet_air_c > 0.06).float()
-        foot_clearance_reward = torch.sum(torch.exp(-torch.square((feet_z - 0.18) / 0.03)) * swinging, dim=1)
+        # v1.3: clearance reward peaked at MID-SWING (clock phase), so the paid
+        # behavior is a real arc, not a low skim that technically leaves the floor.
+        p_foot_c = (self._gait_phase.unsqueeze(1) + self._gait_offsets.unsqueeze(0)) % 1.0
+        # v1.3 duty ratio: 0.75 crawl -> 0.60 at 0.3 m/s (defined here, reused by
+        # the clock schedule below).
+        stance_r = (0.75 - 0.15 * torch.clamp(self._commands[:, 0] / 0.3, max=1.0)).unsqueeze(1)
+        mid_swing = (stance_r + 1.0) / 2.0
+        mid_gate = torch.exp(-torch.square((p_foot_c - mid_swing) / 0.06))
+        foot_clearance_reward = torch.sum(
+            torch.exp(-torch.square((feet_z - 0.18) / 0.03)) * swinging * (0.3 + 0.7 * mid_gate), dim=1
+        )
 
         # Foot-TIP kinematics (shared by D + E). The arm_c link origin is the KNEE
         # (~0.145 m above the contact), so link velocity is contaminated by body
@@ -424,7 +441,8 @@ class BigberthaEnv(DirectRLEnv):
         #     unload and lift; dragging through contact scores nothing).
         # Full-stop commands force all-stance (clean standing).
         p_foot = (self._gait_phase.unsqueeze(1) + self._gait_offsets.unsqueeze(0)) % 1.0  # (N,4)
-        in_stance_sched = torch.sigmoid((self.cfg.gait_stance_ratio - p_foot) * 60.0)  # ~1 stance, ~0 swing
+        # v1.3 speed-dependent duty (stance_r defined in the clearance block above).
+        in_stance_sched = torch.sigmoid((stance_r - p_foot) * 60.0)  # ~1 stance, ~0 swing
         stop_cmd = (
             (torch.abs(self._commands[:, 0]) < 0.02)
             & (torch.abs(self._commands[:, 1]) < 0.02)
@@ -477,11 +495,11 @@ class BigberthaEnv(DirectRLEnv):
         f_eff = self.cfg.gait_frequency * (
             1.0 + self.cfg.turn_clock_boost * torch.clamp(torch.abs(cmd_yaw) / 0.4, max=1.0)
         )
-        k_r = (0.5 * self.cfg.gait_stance_ratio / f_eff).view(-1, 1, 1)  # (N,1,1) half stance time
+        k_r = (0.5 * stance_r.squeeze(1) / f_eff).view(-1, 1, 1)  # (N,1,1) half stance time
         neu = self._foot_neutral_b.unsqueeze(0)  # (1,4,2)
         tang = torch.stack([-neu[..., 1], neu[..., 0]], dim=-1)  # z_hat x r per foot
         off = k_r * (self._commands[:, :2].unsqueeze(1) + cmd_yaw.view(-1, 1, 1) * tang)
-        p_des = neu + torch.clamp(off, -0.06, 0.06)  # offsets bounded to foot workspace
+        p_des = neu + torch.clamp(off, -0.09, 0.09)  # v1.3: wider strides for speed
         err2 = torch.sum(torch.square(tips_b - p_des), dim=-1)  # (N,4)
         raibert = torch.sum(torch.exp(-err2 / 0.01) * swinging, dim=1)
 
@@ -565,7 +583,7 @@ class BigberthaEnv(DirectRLEnv):
         # the policy learns to STAND (and turn in place when yaw is commanded)
         # instead of always creeping forward -- this also fixes the deployment
         # quirk where vx=0 was out-of-distribution and the robot walked anyway.
-        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.0, 0.18)  # v1.2G: 0.12->0.18
+        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.0, 0.40)  # v1.3: speed program, servo-feasible ceiling
         self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.05, 0.05)
         # WIDER yaw (+/-0.15 -> +/-0.6 -> +/-0.8): teach real, HARD left/right
         # rotation for obstacle avoidance so the policy can execute Nav2's sharp
