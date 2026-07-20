@@ -13,26 +13,13 @@ from isaaclab.assets import ArticulationCfg
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
 _USD_PATH = os.path.join(_REPO_ROOT, "assets", "usd", "big_bertha", "big_bertha.usd")
 
-# --- Per-joint-group PD gains (tuned to reflected inertia from URDF) --------
-# Each joint group has different reflected inertia, so the same kp/kd would
-# give very different damping ratios.  for current experimentation, only room
-# for improvement is created.
-#   HIP    (110,113,116,119): I_eff ≈ 0.0014-0.0026 kg·m² → kp=5, kd=0.19
-#   THIGH  (111,114,117,120): I_eff ≈ 0.00115 kg·m²       → kp=5, kd=0.13
-#   CALF   (112,115,118,121): I_eff ≈ 0.00048 kg·m²       → kp=5, kd=0.08
-# The old kp=20, kd=2 gave ζ=4-10 and saturated the motor at just 0.059 rad
-# of position error (bang-bang behavior).
-# --- Curriculum actuator switch (no manual edits between phases) ------------
-# Set by the BB_ACTUATOR env var; big_bertha_env_cfg.py reads the same var to
-# pick the matching sim dt. Both model 12x TowerPro MG995 @6.6V: 1.18 N*m stall
-# (12 kgf*cm), 6.54 rad/s no-load (0.16 s/60deg).
-#   "implicit" (default, curriculum phase 1): PD solved in the physics engine ->
-#       leg-lifting is easy to discover, so the policy quickly learns to WALK
-#       FORWARD under the forward-gated reward (issue #46). Native dt 1/200.
-#   "explicit" (phase 2): IdealPD computing the same explicit effort-PD as
-#       gazebo's JointEffortPdController / the real MG995 motors
-#       (tau = clip(kp*(q_des-q) + kd*(0-qd), +/-effort_limit)); fine-tune the
-#       phase-1 walker on it for sim-to-sim fidelity. Needs dt 1/500.
+# BB_ACTUATOR selects the actuator model (also read by big_bertha_env_cfg.py
+# to pick the matching sim dt). Both model 12x TowerPro MG995 @6.6V: 1.18 N*m
+# stall, 6.54 rad/s no-load.
+#   "implicit" (default): PD solved in the physics engine, dt 1/200.
+#   "explicit": IdealPD computing the same effort-PD as Gazebo's
+#       JointEffortPdController / the real MG995 motors. Needs dt 1/500. This
+#       is the deploy contract.
 _HIP_JOINTS = ["Revolute_110", "Revolute_113", "Revolute_116", "Revolute_119"]
 _THIGH_JOINTS = ["Revolute_111", "Revolute_114", "Revolute_117", "Revolute_120"]
 _CALF_JOINTS = ["Revolute_112", "Revolute_115", "Revolute_118", "Revolute_121"]
