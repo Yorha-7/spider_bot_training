@@ -49,9 +49,7 @@ class BigberthaEnv(DirectRLEnv):
         self._command_override = None
         _fixed_cmd = os.environ.get("BB_FIXED_CMD")
         if _fixed_cmd:
-            self._command_override = torch.tensor(
-                [float(x) for x in _fixed_cmd.split(",")], device=self.device
-            )
+            self._command_override = torch.tensor([float(x) for x in _fixed_cmd.split(",")], device=self.device)
 
         # Per-dim observation noise std (lazily built on device in _get_observations)
         self._obs_noise_std = None
@@ -444,10 +442,14 @@ class BigberthaEnv(DirectRLEnv):
         # v1.3 speed-dependent duty (stance_r defined in the clearance block above).
         in_stance_sched = torch.sigmoid((stance_r - p_foot) * 60.0)  # ~1 stance, ~0 swing
         stop_cmd = (
-            (torch.abs(self._commands[:, 0]) < 0.02)
-            & (torch.abs(self._commands[:, 1]) < 0.02)
-            & (torch.abs(self._commands[:, 2]) < 0.05)
-        ).float().unsqueeze(1)
+            (
+                (torch.abs(self._commands[:, 0]) < 0.02)
+                & (torch.abs(self._commands[:, 1]) < 0.02)
+                & (torch.abs(self._commands[:, 2]) < 0.05)
+            )
+            .float()
+            .unsqueeze(1)
+        )
         in_stance_sched = torch.maximum(in_stance_sched, stop_cmd)
         tip_speed = torch.norm(tip_vel_xy, dim=2)  # (N,4) true contact-point speed
         # TASK gate (v1.1.2): the clock rewards (~10 total) pay only in proportion
@@ -462,9 +464,7 @@ class BigberthaEnv(DirectRLEnv):
         #   clock by yaw progress makes marching-without-turning score ~0, so the
         #   only way to earn the clock reward under a turn command is to turn.
         fwd_ratio = torch.clamp(fwd_vel / torch.clamp(self._commands[:, 0], min=0.05), 0.0, 1.0)
-        yaw_ratio = torch.clamp(
-            ach_yaw * torch.sign(cmd_yaw) / torch.clamp(torch.abs(cmd_yaw), min=0.1), 0.0, 1.0
-        )
+        yaw_ratio = torch.clamp(ach_yaw * torch.sign(cmd_yaw) / torch.clamp(torch.abs(cmd_yaw), min=0.1), 0.0, 1.0)
         is_forward = self._commands[:, 0] > 0.05
         is_turn_in_place = (torch.abs(self._commands[:, 0]) < 0.05) & (torch.abs(cmd_yaw) > 0.1)
         vel_gate = torch.where(
@@ -477,7 +477,9 @@ class BigberthaEnv(DirectRLEnv):
         # cheapest way to turn; now it costs ~51%, making stepping-turns win.
         gait_stance_still = torch.sum(vel_gate * in_stance_sched * torch.exp(-torch.square(tip_speed) / 0.005), dim=1)
         foot_forces = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)  # (N,4)
-        gait_swing_unload = torch.sum(vel_gate * (1.0 - in_stance_sched) * torch.exp(-torch.square(foot_forces) / 25.0), dim=1)
+        gait_swing_unload = torch.sum(
+            vel_gate * (1.0 - in_stance_sched) * torch.exp(-torch.square(foot_forces) / 25.0), dim=1
+        )
 
         # F) RAIBERT FOOTHOLD reward (v1.2G, the literature-exact form per
         # Walk-These-Ways / Ask1): desired foothold = neutral position + 0.5 *
@@ -583,7 +585,8 @@ class BigberthaEnv(DirectRLEnv):
         # the policy learns to STAND (and turn in place when yaw is commanded)
         # instead of always creeping forward -- this also fixes the deployment
         # quirk where vx=0 was out-of-distribution and the robot walked anyway.
-        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.0, 0.40)  # v1.3: speed program, servo-feasible ceiling
+        # v1.3: speed program, servo-feasible ceiling
+        self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.0, 0.40)
         self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.05, 0.05)
         # WIDER yaw (+/-0.15 -> +/-0.6 -> +/-0.8): teach real, HARD left/right
         # rotation for obstacle avoidance so the policy can execute Nav2's sharp
