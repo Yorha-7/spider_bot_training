@@ -309,7 +309,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     joint_torque_reward_scale = -1e-4  # v1.2A: 10x, energy-efficiency (MG995 current) + smoother stance
     joint_accel_reward_scale = -1e-7  # Minimal acceleration penalty
     action_rate_reward_scale = -0.05  # v1.2A: 5x, smoother targets = less jitter, kinder sim-to-real
-    flat_orientation_reward_scale = -3.0  # v1.3: firmer level-body (lidar)  # Static tilt penalty (was -1.5): keep the body lidar level
+    # Static tilt penalty (was -1.5): keep the body lidar level. v1.3: -2.0 -> -3.0, firmer level-body for lidar.
+    flat_orientation_reward_scale = -3.0
     joint_deviation_reward_scale = (
         -9.0
     )  # anti-sprawl on HIP joints only (idx 0,3,6,9); -1.0 full-joint was ~8x too weak vs crawl_gait and did nothing
