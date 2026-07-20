@@ -5,11 +5,6 @@
 
 from __future__ import annotations
 
-# spdrbot3_env.py
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
-# All rights reserved.
-#
-# SPDX-License-Identifier: BSD-3-Clause
 import os
 
 import gymnasium as gym
@@ -38,14 +33,8 @@ class BigberthaEnv(DirectRLEnv):
 
         # X/Y linear velocity + yaw angular velocity commands
         self._commands = torch.zeros(self.num_envs, 3, device=self.device)
-        # Optional fixed-command override (shape (3,) [vx, vy, omega]). When set,
-        # _reset_idx applies it INSTEAD of sampling random commands. For demo GIF
-        # recordings: canonical play.py samples a RANDOM command per episode, and
-        # the wide yaw range (+/-0.8) often lands a hard-turn command that looks
-        # like marching/shuffling in place (the robot is actually arcing, not
-        # walking straight). Set BB_FIXED_CMD="vx,vy,yaw" (e.g. "0.10,0,0") to pin
-        # a clean forward command for a legible walking GIF. Unset = normal
-        # random-command training (zero training impact).
+        # BB_FIXED_CMD="vx,vy,yaw" pins the command instead of sampling randomly,
+        # for legible demo recordings.
         self._command_override = None
         _fixed_cmd = os.environ.get("BB_FIXED_CMD")
         if _fixed_cmd:
@@ -54,67 +43,39 @@ class BigberthaEnv(DirectRLEnv):
         # Per-dim observation noise std (lazily built on device in _get_observations)
         self._obs_noise_std = None
 
-        # Get specific body indices
-        # preserve_order=True so the returned order matches this list exactly:
-        # arm_c_1=FR(idx0), arm_c_2=FL(idx1), arm_c_3=RL(idx2), arm_c_4=RR(idx3),
-        # verified against the foot positions in the base frame from the URDF.
+        # preserve_order=True matches this list to FR/FL/RL/RR per the URDF layout.
         self._feet_ids, _ = self._contact_sensor.find_bodies(
             ["arm_c_1_1", "arm_c_2_1", "arm_c_3_1", "arm_c_4_1"], preserve_order=True
         )
-        # Articulation body indices for the SAME feet (body ordering can differ
-        # from the contact sensor), used to read world-frame foot height z for
-        # the swing-foot clearance reward. Same ordered name list => aligned with
-        # _feet_ids per-foot, which the clearance gate relies on.
+        # Same feet, Articulation body ids (ordering can differ from the contact sensor).
         self._feet_body_ids, _ = self._robot.find_bodies(
             ["arm_c_1_1", "arm_c_2_1", "arm_c_3_1", "arm_c_4_1"], preserve_order=True
         )
-        # Foot CONTACT-POINT offset in the arm_c link frame. The arm_c link origin
-        # sits at the knee (~0.145 m above the contact), so its world velocity is
-        # contaminated by body motion and is NOT a valid slip signal. This offset
-        # (from the arm_c collision mesh origin in the URDF) maps the link pose to
-        # the actual foot tip; verified in-sim (planted tip z = 0.000). Used by the
-        # foot-tip slip penalty in _get_rewards.
+        # The arm_c link origin is at the knee, not the contact point, so link
+        # velocity alone is not a valid slip signal. This offset (from the
+        # collision mesh) maps link pose to the actual foot tip.
         self._tip_offset = torch.tensor([0.01, -0.145, -0.053], device=self.device)
-        # Body +x unit vector, for projecting foot motion onto the heading
-        # direction in the forward-stride reward.
         self._x_unit = torch.tensor([1.0, 0.0, 0.0], device=self.device).expand(self.num_envs, 3)
-        # Event-based stride state: the world tip position at each foot's last
-        # LIFTOFF, and the previous-step contact mask. The stride reward pays a foot
-        # only at TOUCHDOWN, for how far forward it moved since liftoff -- so it
-        # cannot be earned by sweeping the foot forward while in contact.
         self._foot_liftoff_pos = torch.zeros(self.num_envs, 4, 3, device=self.device)
         self._prev_contact = torch.ones(self.num_envs, 4, dtype=torch.bool, device=self.device)
-        # v0.9 gait clock: cycle phase in [0,1) advanced at cfg.gait_frequency, plus
-        # fixed per-foot offsets defining a WAVE crawl. Feet order = _feet_ids order
-        # [FR, FL, RL, RR]; offsets stagger the swing windows one-at-a-time
-        # (sequence RR -> FL -> RL -> FR over a cycle) and the FR/FL + RL/RR pairs
-        # differ by exactly 0.5, which keeps the mirror-symmetry augmentation valid
-        # (mirroring = swapping clock dims within each pair, see symmetry.py).
+        # Wave-gait clock: cycle phase + per-foot offsets (order = _feet_ids:
+        # FR/FL/RL/RR). Offsets are 0.5 apart in pairs, which symmetry.py's
+        # mirror augmentation relies on.
         self._gait_phase = torch.zeros(self.num_envs, device=self.device)
-        # v1.2G Raibert: neutral foot-tip xy in BODY frame, captured at the first
-        # reward step (all envs at default pose then). Basis for foothold targets.
+        # Raibert: neutral foot-tip xy in body frame, captured on the first reward call.
         self._foot_neutral_b = None
         self._gait_offsets = torch.tensor([0.0, 0.5, 0.25, 0.75], device=self.device)
         self._die_body_ids, _ = self._contact_sensor.find_bodies(["arm_a_1_1", "arm_a_2_1", "arm_a_3_1", "arm_a_4_1"])
-        # Articulation base index + buffers for the SUSTAINED lateral-bias DR: a
-        # constant body-frame sideways force + yaw torque held for the whole
-        # episode (set_external_force_and_torque applies in the LOCAL link frame,
-        # is_global=False). This is the systematic disturbance a pure velocity
-        # penalty could not supply -- the policy must actively walk straight
-        # against a DART-like crab/yaw push, building the lateral+yaw authority
-        # that transfers. Magnitudes sampled per-episode in _reset_idx.
+        # Sustained per-episode lateral force + yaw torque (local frame), so the
+        # policy must actively hold heading/line against a steady disturbance.
         self._robot_base_id, _ = self._robot.find_bodies("base_link")
         self._lat_bias = torch.zeros(self.num_envs, device=self.device)
         self._yaw_bias = torch.zeros(self.num_envs, device=self.device)
         self._ext_force = torch.zeros(self.num_envs, 1, 3, device=self.device)
         self._ext_torque = torch.zeros(self.num_envs, 1, 3, device=self.device)
-        # Diagonal foot pairs for the trot: {FR,RL}={0,2} swing together while
-        # {FL,RR}={1,3} are in stance, then swap. (Was [[0,3],[1,2]] = same-side
-        # legs, which let the policy satisfy the gait reward with a pronk.)
-        self._foot_pairs = [[0, 2], [1, 3]]  # [FR+RL, FL+RR] diagonals
+        self._foot_pairs = [[0, 2], [1, 3]]  # diagonal pairs: FR+RL, FL+RR
 
-        # Identity negate — ImuCfg offset is identity, so sensor frame =
-        # base_link and IMU data is already in base_link frame natively.
+        # ImuCfg offset is identity, so the sensor frame equals base_link.
         self._imu_negate = torch.tensor([1.0, 1.0, 1.0], device=self.device)
 
         # Logging
@@ -166,13 +127,8 @@ class BigberthaEnv(DirectRLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: torch.Tensor):
-        # Advance the gait clock once per policy step (50 Hz). v1.2F hybrid: the
-        # cadence SCALES UP with the commanded yaw (up to +80% at |yaw|>=0.4) --
-        # stepping yaw rate is cadence-limited (~0.2 rad/s at 0.667 Hz), so a
-        # faster clock during turns raises the steppable ceiling to ~0.3 rad/s,
-        # making the (now capped) turn commands physically trackable by STEPPING.
-        # v1.3: cadence also scales with commanded SPEED (wave crawl at 0.667 Hz
-        # caps body speed ~0.13 m/s; faster clock = more steps/s = faster walk).
+        # Clock cadence scales up with commanded yaw and speed (capped 2.1x),
+        # raising the max yaw rate / speed reachable by stepping instead of skidding.
         boost = (
             1.0
             + self.cfg.turn_clock_boost * torch.clamp(torch.abs(self._commands[:, 2]) / 0.4, max=1.0)
@@ -181,19 +137,14 @@ class BigberthaEnv(DirectRLEnv):
         self._gait_phase = (self._gait_phase + self.cfg.gait_frequency * boost * self.step_dt) % 1.0
         self._actions = torch.clamp(actions.clone(), -1.0, 1.0)
         self._processed_actions = self.cfg.action_scale * self._actions + self._robot.data.default_joint_pos
-        # Action (joint-target) noise: the deployed gazebo joints track the
-        # position targets through an explicit effort-PD that overshoots/lags
-        # vs Isaac's implicit actuator, so the realised joint trajectory differs
-        # from the commanded one. Perturbing the target here (unobserved) forces
-        # the policy to learn a gait that is stable under imperfect tracking
-        # instead of a fragile, Isaac-exact one that drifts/veers in gazebo.
+        # Target noise mimics the tracking error of an explicit effort-PD (Gazebo,
+        # real servos) vs Isaac's implicit actuator, so the gait stays stable
+        # under imperfect tracking.
         if self.cfg.action_noise_std > 0.0:
             self._processed_actions = self._processed_actions + (
                 torch.randn_like(self._processed_actions) * self.cfg.action_noise_std
             )
-        # Hold the per-episode sustained bias: body-y force (lateral crab) + body-z
-        # torque (yaw drift), re-applied every control step (is_global=False ->
-        # local link frame, so it stays body-relative).
+        # Re-apply the sustained per-episode bias every step (local frame).
         if self.cfg.lateral_bias_force > 0.0 or self.cfg.yaw_bias_torque > 0.0:
             self._ext_force[:, 0, 1] = self._lat_bias
             self._ext_torque[:, 0, 2] = self._yaw_bias
@@ -204,16 +155,13 @@ class BigberthaEnv(DirectRLEnv):
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
-        # IMU sensor data: simulated MPU6050 with 180° Z rotation.
-        # ImuCfg offset rotates the sensor frame, so ang_vel_b is reported in
-        # the rotated frame natively (no extra correction needed).
+        # ImuCfg offset is identity, so ang_vel_b / projected_gravity_b are
+        # already reported in the base_link frame.
         imu = self.scene["imu"]
         ang_vel_b = imu.data.ang_vel_b * self._imu_negate
         proj_gravity = imu.data.projected_gravity_b * self._imu_negate
-        # v0.9 gait-clock observation (4 dims, appended LAST): sin of each foot's
-        # cycle phase. The policy must know the schedule to comply with the phase
-        # rewards (Siekmann/WTW). Deployment: the policy node generates the same
-        # clock from time (freq + offsets are constants of the contract).
+        # Per-foot clock phase (sin), appended last. Deployment must reproduce
+        # the same clock from time (frequency + offsets are contract constants).
         clock = torch.sin(2.0 * torch.pi * ((self._gait_phase.unsqueeze(1) + self._gait_offsets.unsqueeze(0)) % 1.0))
         obs = torch.cat(
             [
@@ -232,14 +180,9 @@ class BigberthaEnv(DirectRLEnv):
             ],
             dim=-1,
         )
-        # Observation noise for sim-to-sim robustness. In Isaac the robot trains
-        # nearly level (projected_gravity_x std ~0.03), but in gazebo its forward
-        # CoM tips the body ~14 deg -> grav_x reads -0.24, which is 8+ sigma OOD
-        # and saturates the deployed policy into a frozen, railed stance (audited
-        # live). Injecting noise here widens the baked obs-normalizer so the same
-        # gazebo reading lands ~2 sigma instead of ~8, and forces the policy to
-        # tolerate body tilt + joint-velocity jitter rather than memorising the
-        # clean Isaac signal. Commands/prev_actions are exact (zero noise).
+        # Noise widens the obs-normalizer so it tolerates the larger tilt and
+        # joint-velocity jitter Gazebo produces vs Isaac's clean signal.
+        # Commands/prev_actions stay exact (zero noise).
         if self._obs_noise_std is None:
             self._obs_noise_std = torch.tensor(
                 [0.10] * 3 + [0.20] * 3 + [0.12] * 3 + [0.0] * 3 + [0.03] * 12 + [0.6] * 12 + [0.0] * 12 + [0.0] * 4,
@@ -254,46 +197,31 @@ class BigberthaEnv(DirectRLEnv):
         ang_vel_b = imu.data.ang_vel_b * self._imu_negate
         proj_gravity = imu.data.projected_gravity_b * self._imu_negate
 
-        # Linear velocity tracking — SHARP Gaussian on the xy command error.
-        # sigma^2 was 0.25, which is far too lenient for the small forward
-        # commands here: standing still at cmd 0.2 still scored exp(-0.04/0.25)
-        # = 0.85, so the policy learned to shuffle in place (collecting the gait
-        # rewards) and never translated -- the trained linvel_x distribution was
-        # mean ~0, std 0.045. sigma^2=0.1 makes standing clearly sub-optimal
-        # (~0.05 at the mean command) so the policy must actually move.
+        # Sharp Gaussian on xy velocity error: a lenient sigma lets standing
+        # still score highly, so the policy shuffles/marches instead of
+        # translating.
         lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b[:, :2]), dim=1)
-        # sigma^2 0.1 -> 0.04 (v0.9.1): with the slow command range (vx mean 0.06)
-        # standing still only cost ~3.5% of this term, so the clock-schedule
-        # "march in place" was near-optimal and fwd progress flatlined for 12k
-        # iters. At 0.04 standing at the mean command costs ~9%, restoring a real
-        # translation gradient while the clock keeps the feet honest.
         lin_vel_reward = torch.exp(-lin_vel_error / 0.04)
-        # Forward progress — body-frame x velocity, rewarded LINEARLY (no
-        # saturation at standstill, unlike the exp term). With forward-only
-        # commands this guarantees moving always beats standing, breaking the
-        # shuffle-in-place local optimum. Gated on a forward command.
+        # Linear (non-saturating) forward-velocity reward when commanded
+        # forward, so moving always beats standing.
         fwd_vel = self._robot.data.root_lin_vel_b[:, 0]
         forward_progress = torch.where(
             self._commands[:, 0] > 0.05,
-            torch.clamp(fwd_vel, min=0.0, max=0.40),  # v1.3: speed program
+            torch.clamp(fwd_vel, min=0.0, max=0.40),
             torch.zeros_like(fwd_vel),
         )
-        # z velocity tracking
         z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
-        # angular velocity x/y
-        # v1.3: 3x roll/pitch-rate weight DURING TURNS -- kills the tilt spikes
-        # (max ~10 deg) that would smear the lidar pointcloud in bringup.
+        # 3x roll/pitch-rate weight during turns, damping the tilt spikes that
+        # would otherwise disturb the lidar.
         turn_active = (torch.abs(self._commands[:, 2]) > 0.1).float()
         ang_vel_error = torch.sum(torch.square(ang_vel_b[:, :2]), dim=1) * (1.0 + 2.0 * turn_active)
-        # yaw rate tracking — sharp Gaussian on the yaw-rate error, same shape as
-        # lin_vel. No 1/|cmd|^2 blow-up (that term reached 13-22 in training and
-        # made spinning the dominant reward).
+        # Sharp Gaussian on yaw-rate error (no 1/err^2 blowup, which let
+        # spinning dominate the reward).
         yaw_rate_error = torch.square(self._commands[:, 2] - ang_vel_b[:, 2])
         yaw_reward = torch.exp(-yaw_rate_error / 0.1)
-        # LINEAR yaw-progress: reward yaw rate achieved in the COMMANDED
-        # direction, capped at |cmd|, with no saturation -- so turning always
-        # beats not turning (the exp term above is flat at large error and gave
-        # the policy no reason to commit to a turn). Gated on a real yaw command.
+        # Linear reward for yaw rate achieved in the commanded direction
+        # (capped at |cmd|) -- non-saturating, so turning always beats not
+        # turning.
         cmd_yaw = self._commands[:, 2]
         ach_yaw = ang_vel_b[:, 2]
         yaw_progress = torch.where(
@@ -302,108 +230,69 @@ class BigberthaEnv(DirectRLEnv):
             torch.zeros_like(cmd_yaw),
         )
         yaw_progress = torch.minimum(yaw_progress, torch.abs(cmd_yaw))
-        # Anti-drift: when commanded ~straight, penalize any yaw rate so the gait
-        # holds heading (counters the DART right-drift at the policy level).
+        # Penalize yaw rate when commanded straight, to hold heading.
         straight_gate = (torch.abs(cmd_yaw) < 0.1).float()
         yaw_straight_pen = torch.square(ach_yaw) * straight_gate
-        # Anti-crab: when commanded ~straight laterally (|cmd_vy| ~ 0), penalize
-        # body-frame y velocity so the gait holds its LINE. This is the lateral
-        # analogue of yaw_straight_pen and is the direct cure for the systematic
-        # PhysX->DART sideways/right drift -- the soft exp lin_vel tracking does
-        # not punish a steady slip hard enough.
+        # Penalize body-y velocity when commanded straight laterally (the
+        # lateral analogue of yaw_straight_pen), to hold line.
         lat_straight_gate = (torch.abs(self._commands[:, 1]) < 0.02).float()
         lat_straight_pen = torch.square(self._robot.data.root_lin_vel_b[:, 1]) * lat_straight_gate
-        # Stand-still: when commanded to FULLY stop (vx~0, vy~0, wz~0), penalize
-        # the body's forward velocity so the gait holds position on a zero command
-        # instead of creeping forward -- the source of the post-goal drift in DART.
+        # Penalize forward velocity when commanded to fully stop, so the gait
+        # holds position instead of creeping.
         stand_gate = (
             (torch.abs(self._commands[:, 0]) < 0.02)
             & (torch.abs(self._commands[:, 1]) < 0.02)
             & (torch.abs(self._commands[:, 2]) < 0.05)
         ).float()
         stand_still_pen = torch.square(self._robot.data.root_lin_vel_b[:, 0]) * stand_gate
-        # joint torques
         joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
-        # joint acceleration
         joint_accel = torch.sum(torch.square(self._robot.data.joint_acc), dim=1)
-        # action rate
         action_rate = torch.sum(torch.square(self._actions - self._previous_actions), dim=1)
-        # flat orientation
         flat_orientation = torch.sum(torch.square(proj_gravity[:, :2]), dim=1)
 
-        # Anti-sprawl posture: keep the HIP joints near the compact default pose.
-        # The explicit fine-tune drifted into a WIDE splayed stance (sum(dev^2)
-        # ~0.41 vs the compact implicit gait's ~0.20). 62% of that sprawl energy
-        # is in the four hip joints (idx 0,3,6,9), so penalize only those (leaving
-        # thigh/knee freedom the swing needs). A full-12-joint penalty at -1.0 was
-        # ~8x too weak vs crawl_gait and did nothing; hip-only at -9.0 competes.
+        # Anti-sprawl: penalize HIP joint deviation only, leaving thigh/knee
+        # free for the swing.
         hip_ids = [0, 3, 6, 9]
         joint_deviation = torch.sum(
             torch.square(self._robot.data.joint_pos[:, hip_ids] - self._robot.data.default_joint_pos[:, hip_ids]),
             dim=1,
         )
 
-        # Base-height maintenance: hold the body near the Isaac standing height
-        # (~0.09 m). There was NO height term before, so nothing stopped the
-        # Gazebo sink (0.094 -> 0.063 m) that collapses the stance into a pronk.
-        # Peaked reward (~0.94 at the steady 0.085 m, so it doesn't distort the
-        # working gait) that pays the policy to keep the stance legs extended.
+        # Peaked reward around the measured standing height (0.09 m), tight
+        # sigma so bob is penalized; prevents the sink-to-pronk collapse a
+        # missing height signal would allow.
         base_height = self._robot.data.root_pos_w[:, 2]
-        # Wider sigma (0.035) so a range of standing heights is in-distribution:
-        # in Gazebo the body settles lower (DART contact), and a too-peaky term
-        # made z<0.06 fully out-of-distribution -> the policy pronked. Tolerate
-        # 0.06-0.12 while still peaking at the 0.09 Isaac standing height.
-        # 0.09 = the measured Isaac standing height of the new URDF (base settles
-        # 0.075-0.093). A 0.20 target (introduced in 242a463) is unreachable for
-        # this robot and silently zeroed the whole term (logged 0.0006 for a full
-        # run); restored to the measured height.
-        # v1.2A: sigma 0.035->0.02 -- the wide band tolerated the 9mm bob; tighter
-        # band makes constant height actually pay.
         base_height_reward = torch.exp(-torch.square((base_height - 0.09) / 0.02))
 
-        # Joint activity reward - encourage using all joints
+        # Joint activity: encourage using all joints (mean |joint_vel|).
         joint_vel_magnitude = torch.sum(torch.abs(self._robot.data.joint_vel), dim=1)
         num_joints = self._robot.data.joint_pos.shape[1]
         joint_activity = joint_vel_magnitude / num_joints
 
-        # A) Individual feet air time reward (allow longer lift for natural gait)
+        # A) Feet air-time reward, clamped so long slow swings are allowed.
         feet_air_time = self._contact_sensor.data.current_air_time[:, self._feet_ids]
-        feet_air_time = torch.clamp(feet_air_time, max=1.5)  # slow deliberate swings last longer
+        feet_air_time = torch.clamp(feet_air_time, max=1.5)
         feet_air_time_reward = torch.mean(feet_air_time, dim=1)
 
-        # B) Crawl / wave gait reward + multi-swing guard. The clock schedule (E)
-        # owns strict sequencing, but crawl_gait is kept as reinforcement of the
-        # spider crawl style: exactly ONE sustained swing while moving forward,
-        # with a long deliberate lead swing. (Runs at half its historic weight so
-        # the strict, non-gameable clock terms stay dominant.)
+        # B) Crawl-style reinforcement: exactly one sustained swing while
+        # moving, with a deliberate lead swing. Half-weighted vs the clock
+        # terms below, which own the real (non-gameable) sequencing.
         feet_air_c = self._contact_sensor.data.current_air_time[:, self._feet_ids]
-        n_swing = (feet_air_c > 0.06).float().sum(dim=1)  # genuinely-sustained swings
-        lead_air = torch.clamp(feet_air_c.max(dim=1).values, max=0.45) / 0.45  # 0..1
-        single = (n_swing == 1.0).float()  # exactly one airborne foot (else 0)
+        n_swing = (feet_air_c > 0.06).float().sum(dim=1)
+        lead_air = torch.clamp(feet_air_c.max(dim=1).values, max=0.45) / 0.45
+        single = (n_swing == 1.0).float()
         fwd_gate = torch.clamp(fwd_vel / 0.10, 0.0, 1.0)
         crawl_gait_reward = lead_air * single * fwd_gate
         multi_swing_pen = torch.clamp(n_swing - 1.0, min=0.0)
 
-        # C) Swing-foot CLEARANCE — the missing HEIGHT signal. Air TIME alone
-        # rewarded a foot sliding 1 cm off the ground identically to a 4 cm step,
-        # giving the fast low-lift shuffle. Reward each AIRBORNE foot (gated on
-        # air>0.06 s, so a planted/sliding foot pays zero) for its world-frame
-        # height reaching a clean clear lift.
-        # NOTE (new-URDF recalibration): the foot link (arm_c_*_1) origin sits
-        # near the knee, not the toe, so on the new geometry it stands at z~0.144 m
-        # (planted) and a real swing lifts it to ~0.16-0.18 m -- measured from a
-        # forward rollout. The OLD 0.045 m target was ~10 sigma below that, so this
-        # 6.0-scale term was logging EXACTLY 0.0 (dead): the policy got NO foot-lift
-        # gradient, which is why every leg dragged and one folded under (no per-foot
-        # lift incentive). Target the clean ~3.5 cm lift (0.18 m, = the current
-        # best-case swing height) so all four feet are paid to clear the ground.
-        feet_z = self._robot.data.body_pos_w[:, self._feet_body_ids, 2]  # (N,4) world z
+        # C) Swing-foot clearance: reward each airborne foot reaching a real
+        # lift height, peaked at mid-swing (clock phase) so the paid behavior
+        # is an arc, not a low skim that technically leaves the floor.
+        feet_z = self._robot.data.body_pos_w[:, self._feet_body_ids, 2]
         swinging = (feet_air_c > 0.06).float()
-        # v1.3: clearance reward peaked at MID-SWING (clock phase), so the paid
-        # behavior is a real arc, not a low skim that technically leaves the floor.
         p_foot_c = (self._gait_phase.unsqueeze(1) + self._gait_offsets.unsqueeze(0)) % 1.0
-        # v1.3 duty ratio: 0.75 crawl -> 0.60 at 0.3 m/s (defined here, reused by
-        # the clock schedule below).
+        # Duty ratio shrinks with commanded speed (0.75 crawl -> 0.60 at 0.3
+        # m/s); reused by the clock schedule below.
         stance_r = (0.75 - 0.15 * torch.clamp(self._commands[:, 0] / 0.3, max=1.0)).unsqueeze(1)
         mid_swing = (stance_r + 1.0) / 2.0
         mid_gate = torch.exp(-torch.square((p_foot_c - mid_swing) / 0.06))
@@ -411,36 +300,24 @@ class BigberthaEnv(DirectRLEnv):
             torch.exp(-torch.square((feet_z - 0.18) / 0.03)) * swinging * (0.3 + 0.7 * mid_gate), dim=1
         )
 
-        # Foot-TIP kinematics (shared by D + E). The arm_c link origin is the KNEE
-        # (~0.145 m above the contact), so link velocity is contaminated by body
-        # motion. Compute the actual contact point via FK and its world velocity
-        # tip_vel = v_link + w_link x (R*offset). Verified: planted tip z = 0.000.
-        in_contact = (feet_air_c < 0.001).float()  # (N,4)
-        foot_quat = self._robot.data.body_quat_w[:, self._feet_body_ids, :]  # (N,4,4)
-        foot_linvel = self._robot.data.body_lin_vel_w[:, self._feet_body_ids, :]  # (N,4,3)
-        foot_angvel = self._robot.data.body_ang_vel_w[:, self._feet_body_ids, :]  # (N,4,3)
-        r_tip = quat_apply(foot_quat, self._tip_offset.expand(self.num_envs, 4, 3))  # knee->tip, world
-        tip_vel_xy = (foot_linvel + torch.cross(foot_angvel, r_tip, dim=-1))[..., :2]  # (N,4,2) world
+        # Foot-tip world velocity via FK (link origin is the knee, not the
+        # contact point). tip_vel = v_link + w_link x (R * offset).
+        in_contact = (feet_air_c < 0.001).float()
+        foot_quat = self._robot.data.body_quat_w[:, self._feet_body_ids, :]
+        foot_linvel = self._robot.data.body_lin_vel_w[:, self._feet_body_ids, :]
+        foot_angvel = self._robot.data.body_ang_vel_w[:, self._feet_body_ids, :]
+        r_tip = quat_apply(foot_quat, self._tip_offset.expand(self.num_envs, 4, 3))
+        tip_vel_xy = (foot_linvel + torch.cross(foot_angvel, r_tip, dim=-1))[..., :2]
 
-        # D) Stance-slip penalty: a PLANTED tip must not skid (grip the ground).
+        # D) Stance-slip penalty: a planted tip must not skid.
         foot_dragging = torch.sum(torch.norm(tip_vel_xy, dim=2) * in_contact, dim=1)
 
-        # E) GAIT-CLOCK phase rewards (v0.9, Siekmann ICRA'21 / Walk-These-Ways).
-        # Every contact-gated shaping term (v0.5-v0.8) converged to the sliding
-        # equilibrium because the policy had no phase signal: nothing ever said
-        # "THIS foot must be still NOW". A wave-gait clock (phase phi + per-foot
-        # offsets, also fed to the policy as observations) assigns each foot
-        # stance/swing windows:
-        #   stance window -> reward a STILL foot TIP (kills both slip and the
-        #     blade-edge rolling contact: the only way to hold the tip still while
-        #     loaded is a non-rolling, tip-down leg configuration, which is inside
-        #     the action range at calf ~2.0);
-        #   swing window  -> reward ZERO contact force (the foot must genuinely
-        #     unload and lift; dragging through contact scores nothing).
-        # Full-stop commands force all-stance (clean standing).
-        p_foot = (self._gait_phase.unsqueeze(1) + self._gait_offsets.unsqueeze(0)) % 1.0  # (N,4)
-        # v1.3 speed-dependent duty (stance_r defined in the clearance block above).
-        in_stance_sched = torch.sigmoid((stance_r - p_foot) * 60.0)  # ~1 stance, ~0 swing
+        # E) Gait-clock phase rewards (Siekmann / Walk-These-Ways): stance
+        # window rewards a still foot tip, swing window rewards zero contact
+        # force. This gives the policy a phase signal so "this foot must be
+        # still now" is learnable, unlike a purely contact-gated reward.
+        p_foot = (self._gait_phase.unsqueeze(1) + self._gait_offsets.unsqueeze(0)) % 1.0
+        in_stance_sched = torch.sigmoid((stance_r - p_foot) * 60.0)
         stop_cmd = (
             (
                 (torch.abs(self._commands[:, 0]) < 0.02)
@@ -451,18 +328,11 @@ class BigberthaEnv(DirectRLEnv):
             .unsqueeze(1)
         )
         in_stance_sched = torch.maximum(in_stance_sched, stop_cmd)
-        tip_speed = torch.norm(tip_vel_xy, dim=2)  # (N,4) true contact-point speed
-        # TASK gate (v1.1.2): the clock rewards (~10 total) pay only in proportion
-        # to how well the robot is doing the COMMANDED task. Forward command ->
-        # forward-speed ratio; turn-in-place command (vx~0, |yaw|>0.1) -> YAW-rate
-        # ratio; stop -> 1.
-        #   v1.0.1 only had the forward branch and defaulted the gate to 1.0 for
-        #   everything else. So on a turn-in-place command the policy collected the
-        #   FULL clock reward by marching in place WITHOUT turning -- the clock
-        #   reward (10) dwarfs the yaw reward (~4), so it never paid to actually
-        #   rotate. Measured: 0.005 rad/s achieved vs 0.6 commanded. Gating the
-        #   clock by yaw progress makes marching-without-turning score ~0, so the
-        #   only way to earn the clock reward under a turn command is to turn.
+        tip_speed = torch.norm(tip_vel_xy, dim=2)
+        # Task gate: the clock rewards pay only in proportion to
+        # achieved/commanded speed (forward) or yaw rate (turn-in-place) --
+        # otherwise marching/skidding in place earns the full reward without
+        # doing the commanded task.
         fwd_ratio = torch.clamp(fwd_vel / torch.clamp(self._commands[:, 0], min=0.05), 0.0, 1.0)
         yaw_ratio = torch.clamp(ach_yaw * torch.sign(cmd_yaw) / torch.clamp(torch.abs(cmd_yaw), min=0.1), 0.0, 1.0)
         is_forward = self._commands[:, 0] > 0.05
@@ -472,37 +342,33 @@ class BigberthaEnv(DirectRLEnv):
             fwd_ratio,
             torch.where(is_turn_in_place, yaw_ratio, torch.ones_like(fwd_vel)),
         ).unsqueeze(1)
-        # v1.2E: kernel sigma^2 0.02 -> 0.005. At skid-turn tip speeds (~0.06 m/s) the
-        # old kernel charged only ~16% of the clock reward, so skid-steering was the
-        # cheapest way to turn; now it costs ~51%, making stepping-turns win.
+        # Tight kernel so skid-speed tip motion is actually penalized (a loose
+        # kernel lets skidding score almost as well as planting).
         gait_stance_still = torch.sum(vel_gate * in_stance_sched * torch.exp(-torch.square(tip_speed) / 0.005), dim=1)
-        foot_forces = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)  # (N,4)
+        foot_forces = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)
         gait_swing_unload = torch.sum(
             vel_gate * (1.0 - in_stance_sched) * torch.exp(-torch.square(foot_forces) / 25.0), dim=1
         )
 
-        # F) RAIBERT FOOTHOLD reward (v1.2G, the literature-exact form per
-        # Walk-These-Ways / Ask1): desired foothold = neutral position + 0.5 *
-        # T_stance * (v_cmd + omega_cmd x r). The yaw-induced tangential offset
-        # means that under a turn command the ONLY way to earn this term is to
-        # PLACE swing feet at the rotated targets -- skidding earns zero from it
-        # by construction. Also shapes forward stride placement (same formula,
-        # v_cmd term), attacking fwd slip + front/back duty with one term.
-        tip_pos3 = self._robot.data.body_pos_w[:, self._feet_body_ids, :] + r_tip  # (N,4,3)
+        # F) Raibert foothold: desired placement = neutral position + half
+        # stance time * (v_cmd + yaw x r). Skidding scores ~0 here; only
+        # stepping to the target pays. Also shapes forward stride placement,
+        # attacking fwd slip and front/back duty with the same term.
+        tip_pos3 = self._robot.data.body_pos_w[:, self._feet_body_ids, :] + r_tip
         root_q = self._robot.data.root_quat_w
         rel = tip_pos3 - self._robot.data.root_pos_w[:, None, :]
-        tips_b = quat_apply_inverse(root_q.unsqueeze(1).expand(-1, 4, -1), rel)[..., :2]  # (N,4,2)
+        tips_b = quat_apply_inverse(root_q.unsqueeze(1).expand(-1, 4, -1), rel)[..., :2]
         if self._foot_neutral_b is None:
-            self._foot_neutral_b = tips_b.mean(dim=0).detach().clone()  # (4,2) default-pose tips
+            self._foot_neutral_b = tips_b.mean(dim=0).detach().clone()
         f_eff = self.cfg.gait_frequency * (
             1.0 + self.cfg.turn_clock_boost * torch.clamp(torch.abs(cmd_yaw) / 0.4, max=1.0)
         )
-        k_r = (0.5 * stance_r.squeeze(1) / f_eff).view(-1, 1, 1)  # (N,1,1) half stance time
-        neu = self._foot_neutral_b.unsqueeze(0)  # (1,4,2)
-        tang = torch.stack([-neu[..., 1], neu[..., 0]], dim=-1)  # z_hat x r per foot
+        k_r = (0.5 * stance_r.squeeze(1) / f_eff).view(-1, 1, 1)
+        neu = self._foot_neutral_b.unsqueeze(0)
+        tang = torch.stack([-neu[..., 1], neu[..., 0]], dim=-1)
         off = k_r * (self._commands[:, :2].unsqueeze(1) + cmd_yaw.view(-1, 1, 1) * tang)
-        p_des = neu + torch.clamp(off, -0.09, 0.09)  # v1.3: wider strides for speed
-        err2 = torch.sum(torch.square(tips_b - p_des), dim=-1)  # (N,4)
+        p_des = neu + torch.clamp(off, -0.09, 0.09)
+        err2 = torch.sum(torch.square(tips_b - p_des), dim=-1)
         raibert = torch.sum(torch.exp(-err2 / 0.01) * swinging, dim=1)
 
         rewards = {
@@ -544,9 +410,7 @@ class BigberthaEnv(DirectRLEnv):
         died = torch.any(
             torch.max(torch.norm(net_contact_forces[:, :, self._die_body_ids], dim=-1), dim=1)[0] > 50.0, dim=1
         )
-        # Collapse termination: if the body sinks below 0.04 m it has given way
-        # (spawn z=0.1, steady ~0.085-0.09 are well above), making the sink that
-        # degrades the Gazebo gait into a pronk strictly costly.
+        # Collapse termination: body sunk below the standing band.
         died = died | (self._robot.data.root_pos_w[:, 2] < 0.03)
         return died, time_out
 
@@ -560,63 +424,33 @@ class BigberthaEnv(DirectRLEnv):
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
-        # Reset event-stride state: assume planted (so a liftoff is recorded before
-        # any touchdown -> no stale stride on the first landing after reset).
+        # Assume planted at reset, so a liftoff is recorded before any touchdown.
         self._prev_contact[env_ids] = True
         self._foot_liftoff_pos[env_ids] = 0.0
-        # Random initial gait phase: desynchronizes envs and makes every global
-        # phase shift reachable (also required for the mirror augmentation to map
-        # onto reachable states).
+        # Randomize initial phase so envs desync and all mirror states are reachable.
         self._gait_phase[env_ids] = torch.rand(len(env_ids), device=self.device)
-        # Sample new velocity commands. Forward-biased curriculum: the demo
-        # drives the robot forward, so x is mostly positive (up to 0.6 m/s, which
-        # brackets the 0.3 m/s demo command), with modest lateral and yaw for
-        # steering. The previous symmetric +/-0.2 box gave no reason to prefer
-        # forward, so the policy never committed to translating.
+
+        # Forward-biased command sampling. Speed program: vx in [0, 0.4] m/s
+        # (servo-feasible ceiling); yaw in [-0.5, 0.5] (wider ranges require
+        # skidding, since stepping can't track them).
         self._commands[env_ids] = torch.zeros_like(self._commands[env_ids])
-        # Forward command range narrowed 0.15-0.4 -> 0.1-0.3 m/s (issue #35): the
-        # MG995-limited legs (velocity_limit 4.0 rad/s) cannot sustain the upper
-        # 0.4 m/s, so commanding it only taught the policy to move too fast for
-        # its own good. 0.3 m/s still brackets the 0.3 m/s demo command while
-        # staying inside what the hardware can actually deliver.
-        # Slow deliberate creep (was 0.1-0.3): the reference crawl is a slow wave,
-        # and capping forward_progress at 0.12 needs the command in that range.
-        # Low end lowered 0.05 -> 0.0 so some envs are commanded near-stationary:
-        # the policy learns to STAND (and turn in place when yaw is commanded)
-        # instead of always creeping forward -- this also fixes the deployment
-        # quirk where vx=0 was out-of-distribution and the robot walked anyway.
-        # v1.3: speed program, servo-feasible ceiling
         self._commands[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(0.0, 0.40)
         self._commands[env_ids, 1] = torch.empty(len(env_ids), device=self.device).uniform_(-0.05, 0.05)
-        # WIDER yaw (+/-0.15 -> +/-0.6 -> +/-0.8): teach real, HARD left/right
-        # rotation for obstacle avoidance so the policy can execute Nav2's sharp
-        # in-place turns directly (the missing "hard turn" that left the robot
-        # unable to escape obstacles); removes the policy-node yaw clamp workaround.
-        # v1.2F: +/-0.8 -> +/-0.5. Stepping cannot track 0.8 rad/s at any cadence we
-        # run; infeasible commands teach skidding (measured: planted tips moved at
-        # exactly omega*r under the old range).
         self._commands[env_ids, 2] = torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
-        # TURN-IN-PLACE category (v1.1.1): 30% of envs are commanded to rotate in
-        # place -- vx=0, vy=0, strong yaw (+/-0.3..0.8). The independent sampling
-        # above almost never produces a clean in-place turn (vx ~ uniform 0-0.12,
-        # so nearly always creeping forward), so the policy learned to ARC but not
-        # pivot -- measured 0.005 rad/s achieved vs 0.6 commanded at iter 36k. The
-        # literature (legged_gym / Walk-These-Ways) is explicit that in-place
-        # turning is learned only by dedicating commands with zero linear velocity
-        # and non-zero yaw. The remaining 70% forward+steer preserves the (mature)
-        # forward gait, and fine-tuning from the forward checkpoint anchors it.
+        # 30% of envs get a pure turn-in-place command (vx=vy=0, yaw in the
+        # steppable range): independent sampling almost never produces that
+        # combination, so without this the policy never practices pivoting.
         _n = len(env_ids)
         _turn = torch.rand(_n, device=self.device) < 0.30
         _sign = torch.where(torch.rand(_n, device=self.device) < 0.5, -1.0, 1.0)
-        _strong_yaw = torch.empty(_n, device=self.device).uniform_(0.15, 0.4) * _sign  # v1.2F: steppable range
+        _strong_yaw = torch.empty(_n, device=self.device).uniform_(0.15, 0.4) * _sign
         z = torch.zeros_like(self._commands[env_ids, 0])
         self._commands[env_ids, 0] = torch.where(_turn, z, self._commands[env_ids, 0])
         self._commands[env_ids, 1] = torch.where(_turn, z, self._commands[env_ids, 1])
         self._commands[env_ids, 2] = torch.where(_turn, _strong_yaw, self._commands[env_ids, 2])
-        # Sample the per-episode SUSTAINED bias disturbance (sim-to-sim crab DR):
-        # a constant body-frame lateral force + yaw torque held for the episode,
-        # so the policy learns to actively hold its line/heading against a
-        # DART-like directional push (the missing DR behind the residual drift).
+
+        # Per-episode sustained lateral force + yaw torque, so the policy
+        # learns authority against a steady directional disturbance.
         if self.cfg.lateral_bias_force > 0.0:
             self._lat_bias[env_ids] = torch.empty(len(env_ids), device=self.device).uniform_(
                 -self.cfg.lateral_bias_force, self.cfg.lateral_bias_force
@@ -625,11 +459,8 @@ class BigberthaEnv(DirectRLEnv):
             self._yaw_bias[env_ids] = torch.empty(len(env_ids), device=self.device).uniform_(
                 -self.cfg.yaw_bias_torque, self.cfg.yaw_bias_torque
             )
-        # If a fixed-command override is active, replace the freshly sampled
-        # random commands for the reset envs with the user's fixed values. This
-        # runs BEFORE _get_observations, so the policy never sees a stray random
-        # command after a mid-episode reset (issue #40: zero vx/vy/omega must
-        # keep the robot stationary).
+        # Apply the fixed-command override after sampling, so a mid-episode
+        # reset can't reintroduce a random command.
         if self._command_override is not None:
             self._commands[env_ids] = self._command_override.to(self._commands.device)
         # Reset robot state
