@@ -7,7 +7,7 @@ Multi-robot locomotion training using PPO on [NVIDIA Isaac Lab](https://isaac-si
 
 | Spider (SG90) | Big Bertha (MG995) |
 |:---:|:---:|
-| <img src="assets/gifs/spider.gif" width="360"> | <img src="assets/gifs/1.0.0.gif" width="360"> |
+| <img src="assets/gifs/spider.gif" width="360"> | <img src="assets/gifs/big_bertha_v1.0.0.gif" width="360"> |
 
 Big Bertha v1.0.0: forward walk, 90° turn right, forward walk, 180° turn left — final trained policy (0.29 m/s, 0 deaths).
 
