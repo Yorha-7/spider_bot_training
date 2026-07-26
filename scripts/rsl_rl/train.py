@@ -211,6 +211,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         print(f"[INFO]: Loading model checkpoint from: {resume_path}")
         # load previously trained model
         runner.load(resume_path)
+        # BB_RESET_STD=<v>: re-init the exploration std after load. v1.0.0's
+        # std ratcheted to ~2400 (env-side action clamp + entropy bonus), so a
+        # fine-tune must not inherit it; weights and normalizer are kept.
+        _reset_std = os.environ.get("BB_RESET_STD")
+        if _reset_std:
+            _val = float(_reset_std)
+            with torch.no_grad():
+                for _name, _p in runner.alg.actor.named_parameters():
+                    if "std_param" in _name:
+                        _p.fill_(torch.tensor(_val).log().item() if "log_std" in _name else _val)
+            print(f"[INFO]: policy exploration std reset to {_val}")
 
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
