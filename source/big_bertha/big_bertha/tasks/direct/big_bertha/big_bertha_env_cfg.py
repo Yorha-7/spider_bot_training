@@ -26,11 +26,13 @@ _EXPLICIT = os.environ.get("BB_ACTUATOR", "explicit").lower() == "explicit"
 _SIM_DT = 1 / 500 if _EXPLICIT else 1 / 200
 _DECIMATION = 10 if _EXPLICIT else 4
 
-# BB_FRICTION_FLOOR=high|low (default high): raises the foot-friction DR floor
-# so the feet can grip. Ground mu stays 1.0 (multiply combine).
+# BB_FRICTION_FLOOR=high|low (default high): friction DR floor. Ground mu
+# stays 1.0 (multiply combine). The high floor was lowered 1.0 -> 0.6: the
+# policy had never seen a floor slicker than its own feet, and real plastic
+# feet on smooth floor run mu ~0.4-0.7.
 _FRIC_HIGH = os.environ.get("BB_FRICTION_FLOOR", "high").lower() != "low"
-_STATIC_FRIC_RANGE = (1.0, 2.0) if _FRIC_HIGH else (0.25, 2.0)
-_DYNAMIC_FRIC_RANGE = (0.9, 1.6) if _FRIC_HIGH else (0.2, 1.6)
+_STATIC_FRIC_RANGE = (0.6, 2.0) if _FRIC_HIGH else (0.25, 2.0)
+_DYNAMIC_FRIC_RANGE = (0.5, 1.6) if _FRIC_HIGH else (0.2, 1.6)
 
 # BB_EVAL_CLEAN=1: pins domain randomization at its training-distribution
 # centers (not nominal edges -- the corners are out of distribution and were
@@ -62,14 +64,29 @@ class EventCfg:
             "num_buckets": 64,
         },
     )
-    # Added base mass brackets the real assembled robot's weight over the CAD model.
+    # Added base mass brackets the real assembled robot's weight over the CAD
+    # model. reset-mode (was startup) so each episode draws a fresh mass.
     add_base_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
-        mode="startup",
+        mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base_link"),
             "mass_distribution_params": (0.0, 0.3) if not _EVAL_CLEAN else (0.15, 0.15),
             "operation": "add",
+        },
+    )
+    # COM offset on the base: lidar + battery are 26% of total mass and their
+    # real mounting differs from CAD; a COM shift is what body tilt is made of.
+    base_com = EventTerm(
+        func=mdp.randomize_rigid_body_com,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="base_link"),
+            "com_range": {
+                "x": (-0.015, 0.015) if not _EVAL_CLEAN else (0.0, 0.0),
+                "y": (-0.015, 0.015) if not _EVAL_CLEAN else (0.0, 0.0),
+                "z": (-0.01, 0.01) if not _EVAL_CLEAN else (0.0, 0.0),
+            },
         },
     )
     # Random shove (linear + angular) every few seconds, so the policy learns
@@ -146,6 +163,13 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     decimation = _DECIMATION
     action_scale = 0.25
     action_noise_std = 0.05 if not _EVAL_CLEAN else 0.0  # rad target noise; 0 in clean eval
+    # Servo realism (see _pre_physics_step / _reset_idx): fixed per-episode
+    # horn-calibration offset, 0/1-step command latency, and IMU biases
+    # (observation-side only). All zero in clean eval.
+    joint_calib_range = 0.03 if not _EVAL_CLEAN else 0.0  # rad, ~1.7 deg horn spline
+    action_delay_prob = 0.5 if not _EVAL_CLEAN else 0.0  # P(one 20 ms step of latency)
+    imu_grav_bias = 0.03 if not _EVAL_CLEAN else 0.0  # ~1.7 deg mount error
+    imu_gyro_bias = 0.05 if not _EVAL_CLEAN else 0.0  # rad/s
     # Sustained per-episode lateral force + yaw torque (constant body-frame
     # disturbance, applied in _pre_physics_step), so the policy must actively
     # hold heading/line rather than just resist an impulsive push. Set 0 to disable.
@@ -160,7 +184,6 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # so turning and fast walking stay steppable instead of requiring skidding.
     turn_clock_boost = 0.8
     speed_clock_boost = 1.1
-    gait_stance_ratio = 0.75
     state_space = 0
 
     # simulation
@@ -228,21 +251,23 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
         resolution=(1280, 720),
     )
 
-    # Reward scales. lin_vel is the primary translation signal; yaw a modest
-    # steering term; gait shaping stays below lin_vel so a walk serves forward
-    # motion rather than the reverse.
-    lin_vel_reward_scale = 2.0
+    # Reward scales. Rebalanced from the measured tfevents decomposition of
+    # v1.0.0 (gait shaping outweighed the task 3.8:1 and half the gait reward
+    # was payable in place): task terms up, gait terms trimmed + vel-gated.
+    lin_vel_reward_scale = 3.0
     z_vel_reward_scale = -1.0  # heave penalty, damps body bob
     ang_vel_reward_scale = -0.10  # roll/pitch RATE penalty, keeps the lidar level
     joint_torque_reward_scale = -1e-4  # energy efficiency + smoother stance
-    joint_accel_reward_scale = -1e-7
+    # -1e-7 was a hidden anti-speed term (measured -0.55/s, 55% of
+    # forward_progress; joint accel grows quadratically with cadence).
+    joint_accel_reward_scale = -3e-8
     action_rate_reward_scale = -0.05  # smoother action targets, kinder sim-to-real
-    flat_orientation_reward_scale = -3.0  # static tilt penalty, keeps the body lidar level
-    joint_deviation_reward_scale = -9.0  # anti-sprawl on HIP joints only (idx 0,3,6,9)
+    flat_orientation_reward_scale = -5.0  # static tilt penalty, keeps the body lidar level
+    # -9.0 was the largest penalty in the objective AND mis-indexed onto an
+    # ankle; hips are the stride joints on this radial layout, keep it mild.
+    joint_deviation_reward_scale = -3.0
     base_height_reward_scale = 2.0  # holds body near the 0.09 m standing height
     joint_activity_reward_scale = -0.01  # penalty on mean |joint_vel|, discourages fast joint motion
-    gait_pattern_reward_scale = 2.0  # unused, superseded by feet_air_time + the gait clock
-    feet_air_time_reward_scale = 1.0  # small lift bootstrap; the gait clock owns swing timing
     # Crawl-style reinforcement: exactly one sustained swing while moving, with
     # a deliberate lead swing. Half the weight of the clock terms below, which
     # are the non-gameable ones.
@@ -252,9 +277,9 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     gait_stance_still_reward_scale = 6.0
     gait_swing_unload_reward_scale = 4.0
     # Raibert foothold: places swing feet at velocity/yaw-shifted targets; skid
-    # earns zero from it by construction.
-    raibert_reward_scale = 6.0
-    foot_clearance_reward_scale = 6.0  # reward an airborne foot reaching a real clearance height
+    # earns zero from it by construction. Now vel-gated (was payable in place).
+    raibert_reward_scale = 4.0
+    foot_clearance_reward_scale = 4.0  # FK-tip arc apex (~5 cm), vel-gated
     multi_swing_penalty_scale = -2.0  # penalize 2+ feet airborne, enforces a 3-foot support tripod
     yaw_rate_reward_scale = 3.0  # tracks the commanded yaw rate
     # Linear yaw-progress reward: pays for yaw rate achieved in the commanded

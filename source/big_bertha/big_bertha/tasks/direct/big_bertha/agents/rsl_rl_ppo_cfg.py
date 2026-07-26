@@ -19,7 +19,9 @@ from isaaclab_rl.rsl_rl import (
 class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
     """PPO runner configuration for the Big Bertha velocity-control task."""
 
-    num_steps_per_env = 24
+    # 48 steps ~ 1 gait cycle at 0.667 Hz / 50 Hz control (24 covered only a
+    # third of a cycle, starving cycle-level credit assignment).
+    num_steps_per_env = 48
     max_iterations = 5000
     save_interval = 100
     experiment_name = "big_bertha"
@@ -34,26 +36,25 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.01,
+        # 0.01 drove an unbounded std ratchet (the env clamps actions, so the
+        # return is std-insensitive past ~1 while the bonus keeps paying;
+        # v1.0.0 ended at std ~2400 with LR pinned at the adaptive cap).
+        entropy_coef=1.0e-3,
         num_learning_epochs=5,
-        num_mini_batches=4,
+        num_mini_batches=8,  # keeps minibatch size (VRAM) flat after 24->48 steps
         learning_rate=1.0e-4,
         schedule="adaptive",
-        gamma=0.99,
+        gamma=0.997,  # ~2 gait cycles of horizon (0.99 was ~1.3)
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,
-        # Mirror-symmetry about the forward (x) axis -> a laterally-unbiased gait
-        # that walks straight under DART's contact too (the principled cure for
-        # the PhysX->DART crab; Mittal 2024). use_mirror_loss directly minimizes
-        # the asymmetry of the policy's MEAN actions, which bypasses the action
-        # saturation (std ~1676) that left the data-augmentation alone unable to
-        # push the crab below ~0.5 m. coeff is sized so the term (~coeff*sym_loss
-        # with sym_loss ~2.7e8) is comparable to the PPO losses. See symmetry.py.
+        # Mirror-symmetry about the forward (x) axis (Mittal 2024). coeff sized
+        # against the MEASURED Loss/symmetry ~3e4 (the old 1e-8 was calibrated
+        # to a stale 2.7e8 figure and contributed ~1e-4 -- a numerical no-op).
         symmetry_cfg=RslRlSymmetryCfg(
             use_data_augmentation=True,
             use_mirror_loss=True,
-            mirror_loss_coeff=1.0e-8,
+            mirror_loss_coeff=1.0e-4,
             data_augmentation_func=compute_symmetry,
         ),
     )
