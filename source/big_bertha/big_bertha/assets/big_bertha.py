@@ -7,7 +7,7 @@ The following configuration parameters are available:
 import os
 
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import IdealPDActuatorCfg, ImplicitActuatorCfg
+from isaaclab.actuators import DCMotorCfg, ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
@@ -24,28 +24,25 @@ _HIP_JOINTS = ["Revolute_110", "Revolute_113", "Revolute_116", "Revolute_119"]
 _THIGH_JOINTS = ["Revolute_111", "Revolute_114", "Revolute_117", "Revolute_120"]
 _CALF_JOINTS = ["Revolute_112", "Revolute_115", "Revolute_118", "Revolute_121"]
 
-if os.environ.get("BB_ACTUATOR", "explicit").lower() == "explicit":
-    _HIP_ACT = IdealPDActuatorCfg(
-        joint_names_expr=_HIP_JOINTS,
+
+def _mg995(joints):
+    # DCMotor adds the linear torque-speed curve IdealPD ignored: 1.18 N*m
+    # stall falling to 0 at the ~7.2 rad/s no-load speed (6.54 @6V datasheet
+    # scaled to 6.6V). The sim servo no longer has full torque at full speed.
+    return DCMotorCfg(
+        joint_names_expr=joints,
         effort_limit=1.18,
-        velocity_limit=6.54,
+        saturation_effort=1.18,
+        velocity_limit=7.2,
         stiffness=20.0,
-        damping=2,
+        damping=2.0,
     )
-    _THIGH_ACT = IdealPDActuatorCfg(
-        joint_names_expr=_THIGH_JOINTS,
-        effort_limit=1.18,
-        velocity_limit=6.54,
-        stiffness=20,
-        damping=2,
-    )
-    _CALF_ACT = IdealPDActuatorCfg(
-        joint_names_expr=_CALF_JOINTS,
-        effort_limit=1.18,
-        velocity_limit=6.54,
-        stiffness=20,
-        damping=2,
-    )
+
+
+if os.environ.get("BB_ACTUATOR", "explicit").lower() == "explicit":
+    _HIP_ACT = _mg995(_HIP_JOINTS)
+    _THIGH_ACT = _mg995(_THIGH_JOINTS)
+    _CALF_ACT = _mg995(_CALF_JOINTS)
 else:
     _HIP_ACT = ImplicitActuatorCfg(
         joint_names_expr=_HIP_JOINTS,
