@@ -212,6 +212,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # re-apply fixed commands after any reset that may have occurred during get_observations
     env.unwrapped._commands[:] = fixed_cmd
     timestep = 0
+    # BB_EVAL_STEPS=<n>: after a 250-step settle, collect n steps of metrics
+    # (vx/wz tracking, tilt, per-ankle amplitude), print one JSON line, exit.
+    eval_steps = int(os.environ.get("BB_EVAL_STEPS", "0"))
+    eval_skip = 250
+    ev = {"vx": [], "wz": [], "tilt": [], "q_ankle": []} if eval_steps else None
+    # BB_CMD_SEQ="vx,vy,wz:steps;...": step through a command sequence (for
+    # the multi-command demo GIF); overrides the fixed command over time.
+    seq = []
+    if os.environ.get("BB_CMD_SEQ"):
+        t_acc = 0
+        for part in os.environ["BB_CMD_SEQ"].split(";"):
+            cmd_s, dur = part.split(":")
+            t_acc += int(dur)
+            seq.append((t_acc, torch.tensor([float(x) for x in cmd_s.split(",")], device=env.unwrapped.device)))
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
@@ -222,13 +236,53 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             # env stepping
             obs, _, dones, _ = env.step(actions)
             # override commands for any environments that just reset
+            if seq:
+                for t_end, cmd in seq:
+                    if timestep < t_end:
+                        fixed_cmd = cmd
+                        env.unwrapped._command_override = cmd
+                        break
             env.unwrapped._commands[:] = fixed_cmd
             # reset recurrent states for episodes that have terminated
             if version.parse(installed_version) >= version.parse("4.0.0"):
                 policy.reset(dones)
             else:
                 policy_nn.reset(dones)
-        if args_cli.video:
+        if ev is not None:
+            timestep += 1
+            if timestep > eval_skip:
+                robot = env.unwrapped._robot
+                ev["vx"].append(robot.data.root_lin_vel_b[:, 0].mean().item())
+                ev["wz"].append(robot.data.root_ang_vel_b[:, 2].mean().item())
+                g = robot.data.projected_gravity_b
+                tilt = torch.rad2deg(torch.acos(torch.clamp(-g[:, 2], -1.0, 1.0)))
+                ev["tilt"].append(tilt.mean().item())
+                # type-grouped joint order: ankles are [8:12] = legs 1..4 (FR/FL/RL/RR)
+                ev["q_ankle"].append(robot.data.joint_pos[:, 8:12].mean(dim=0).cpu())
+            if timestep >= eval_skip + eval_steps:
+                import json
+
+                q = torch.stack(ev["q_ankle"])  # (T, 4)
+                amp = (q.max(dim=0).values - q.min(dim=0).values).tolist()
+                front = 0.5 * (amp[0] + amp[1])
+                rear = 0.5 * (amp[2] + amp[3])
+                tilts = torch.tensor(ev["tilt"])
+                print(
+                    "BB_EVAL "
+                    + json.dumps(
+                        {
+                            "cmd": [args_cli.vx, args_cli.vy, args_cli.omega],
+                            "vx_mean": sum(ev["vx"]) / len(ev["vx"]),
+                            "wz_mean": sum(ev["wz"]) / len(ev["wz"]),
+                            "tilt_mean_deg": tilts.mean().item(),
+                            "tilt_p95_deg": tilts.quantile(0.95).item(),
+                            "ankle_amp": amp,
+                            "ankle_front_rear_ratio": front / max(rear, 1e-6),
+                        }
+                    )
+                )
+                break
+        elif args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video
             if timestep == args_cli.video_length:
