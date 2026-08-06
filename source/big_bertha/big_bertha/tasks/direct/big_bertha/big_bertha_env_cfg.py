@@ -262,6 +262,12 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # forward_progress; joint accel grows quadratically with cadence).
     joint_accel_reward_scale = -3e-8
     action_rate_reward_scale = -0.05  # smoother action targets, kinder sim-to-real
+    # Charges only for action magnitude BEYOND the [-1, 1] clamp, so it is
+    # inert while the policy behaves and bites the moment it starts to
+    # saturate. v1.1.0 had no such term: the clamp made over-driving free, the
+    # actor drifted to |a| ~ 1e4, and the deployed policy became a bang-bang
+    # square wave that only walks because sim actuators low-pass it.
+    action_l2_reward_scale = -2e-3  # LINEAR in excess, see big_bertha_env.py
     flat_orientation_reward_scale = -5.0  # static tilt penalty, keeps the body lidar level
     # -9.0 was the largest penalty in the objective AND mis-indexed onto an
     # ankle; hips are the stride joints on this radial layout, keep it mild.

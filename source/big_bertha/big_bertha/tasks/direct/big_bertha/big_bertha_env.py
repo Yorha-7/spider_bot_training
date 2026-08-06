@@ -99,6 +99,7 @@ class BigberthaEnv(DirectRLEnv):
                 "dof_torques_l2",
                 "dof_acc_l2",
                 "action_rate_l2",
+                "action_l2",
                 "flat_orientation_l2",
                 "joint_deviation",
                 "base_height",
@@ -150,7 +151,13 @@ class BigberthaEnv(DirectRLEnv):
             + self.cfg.speed_clock_boost * torch.clamp(self._commands[:, 0] / 0.3, max=1.0)
         ).clamp(max=2.1)
         self._gait_phase = (self._gait_phase + self.cfg.gait_frequency * boost * self.step_dt) % 1.0
-        self._actions = torch.clamp(actions.clone(), -1.0, 1.0)
+        # Keep the pre-clamp action so the reward can penalise its magnitude.
+        # Clamping alone gives the policy no reason to stay inside [-1, 1]: once
+        # the mean saturates, every further increase costs nothing and the actor
+        # weights drift. v1.1.0 ended up emitting |a| ~ 1e4, which the clamp
+        # turned into a pure bang-bang square wave. See action_l2 below.
+        self._raw_actions = actions.clone()
+        self._actions = torch.clamp(self._raw_actions, -1.0, 1.0)
         # Per-episode horn-calibration offset rides on the target, like a real
         # mis-splined servo horn.
         self._processed_actions = (
@@ -272,6 +279,20 @@ class BigberthaEnv(DirectRLEnv):
         joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
         joint_accel = torch.sum(torch.square(self._robot.data.joint_acc), dim=1)
         action_rate = torch.sum(torch.square(self._actions - self._previous_actions), dim=1)
+        # Penalty on the PRE-clamp action. action_rate above uses the clamped
+        # value, so once the mean saturates it reads a constant and stops
+        # penalising anything. Only the raw magnitude still carries gradient,
+        # and without this term nothing stops the actor drifting to |a| ~ 1e4.
+        # Excess beyond the clamp is what is charged for; staying inside
+        # [-1, 1] is free, so the term shapes nothing until saturation starts.
+        #
+        # LINEAR in the excess, deliberately not squared. We fine-tune from a
+        # checkpoint already sitting at |a| ~ 1e4, where a squared term is
+        # -4.8e4 per step and would blow up the first update. Linear keeps the
+        # gradient constant at the scale regardless of how far out the action
+        # is, so the pull back toward the clamp is steady and bounded from any
+        # starting magnitude.
+        action_excess = torch.sum(torch.clamp(torch.abs(self._raw_actions) - 1.0, min=0.0), dim=1)
         flat_orientation = torch.sum(torch.square(proj_gravity[:, :2]), dim=1)
 
         # Anti-sprawl: penalize HIP joint deviation only, leaving thigh/knee
@@ -408,6 +429,7 @@ class BigberthaEnv(DirectRLEnv):
             "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
             "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
             "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
+            "action_l2": action_excess * self.cfg.action_l2_reward_scale * self.step_dt,
             "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
             "joint_deviation": joint_deviation * self.cfg.joint_deviation_reward_scale * self.step_dt,
             "base_height": base_height_reward * self.cfg.base_height_reward_scale * self.step_dt,
