@@ -22,7 +22,7 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
     # 48 steps ~ 1 gait cycle at 0.667 Hz / 50 Hz control (24 covered only a
     # third of a cycle, starving cycle-level credit assignment).
     num_steps_per_env = 48
-    max_iterations = 5000
+    max_iterations = 15000
     save_interval = 100
     experiment_name = "big_bertha"
     empirical_normalization = True
