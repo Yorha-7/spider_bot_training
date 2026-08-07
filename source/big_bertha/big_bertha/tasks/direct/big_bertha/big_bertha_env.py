@@ -236,9 +236,17 @@ class BigberthaEnv(DirectRLEnv):
         # Linear (non-saturating) forward-velocity reward when commanded
         # forward, so moving always beats standing.
         fwd_vel = self._robot.data.root_lin_vel_b[:, 0]
+        # Progress ALONG the commanded direction, not along +x. The old form
+        # gated on cmd_vx > 0.05, so a reverse command scored zero here and the
+        # largest positive term in the objective (scale 8.0) simply went absent,
+        # leaving reverse to be learned from track_lin_vel_xy_exp (3.0) alone
+        # against the full gait-shaping stack. Multiplying by sign(cmd_vx) is
+        # bit-identical for forward commands and makes reverse pay the same.
+        cmd_vx = self._commands[:, 0]
+        along_cmd = fwd_vel * torch.sign(cmd_vx)
         forward_progress = torch.where(
-            self._commands[:, 0] > 0.05,
-            torch.clamp(fwd_vel, min=0.0, max=0.40),
+            cmd_vx.abs() > 0.05,
+            torch.clamp(along_cmd, min=0.0, max=0.40),
             torch.zeros_like(fwd_vel),
         )
         z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
@@ -455,11 +463,12 @@ class BigberthaEnv(DirectRLEnv):
         return reward
 
     def _sample_commands(self, env_ids: torch.Tensor):
-        """Forward-biased (vx, vy, yaw) sampling with pivot and stop cells.
+        """Forward-biased (vx, vy, yaw) sampling with pivot, reverse and stop cells.
 
-        vx in [0, 0.4] (servo-feasible), yaw in [-0.5, 0.5]. 30% of draws are
-        pure turn-in-place; 5% are full stop (Nav2 idles between goals and
-        the stop regime was previously ~never trained).
+        vx in [0, 0.4] (servo-feasible), yaw in [-0.5, 0.5]. Cell split:
+        30% pure turn-in-place, 12% reverse, 5% full stop, 53% forward.
+        Nav2 idles between goals and reverses to recover, so both regimes are
+        sampled explicitly rather than left to the tails of a uniform draw.
         """
         n = len(env_ids)
         self._commands[env_ids] = 0.0
@@ -468,11 +477,23 @@ class BigberthaEnv(DirectRLEnv):
         self._commands[env_ids, 2] = torch.empty(n, device=self.device).uniform_(-0.5, 0.5)
         draw = torch.rand(n, device=self.device)
         turn = draw < 0.30
+        rev = (draw >= 0.30) & (draw < 0.42)
         stop = draw > 0.95
         sign = torch.where(torch.rand(n, device=self.device) < 0.5, -1.0, 1.0)
         strong_yaw = torch.empty(n, device=self.device).uniform_(0.15, 0.4) * sign
+        # Reverse cell. A dedicated cell rather than widening the uniform vx
+        # range: uniform over [-0.15, 0.40] puts most negative draws near zero,
+        # where they teach nothing. -0.15 is Nav2's BackUp recovery speed, which
+        # is the only case that actually commands reverse; faster reverse would
+        # spend policy capacity on a regime nothing asks for.
+        # vy and yaw keep their forward-cell distributions, so this cell is the
+        # exact C2 image of the forward cell (C2 maps vx -> -vx, vy -> -vy,
+        # yaw -> yaw) and the symmetry augmentation can pair the two.
+        reverse_vx = torch.empty(n, device=self.device).uniform_(-0.15, -0.05)
         z = torch.zeros_like(self._commands[env_ids, 0])
-        self._commands[env_ids, 0] = torch.where(turn | stop, z, self._commands[env_ids, 0])
+        self._commands[env_ids, 0] = torch.where(
+            turn | stop, z, torch.where(rev, reverse_vx, self._commands[env_ids, 0])
+        )
         self._commands[env_ids, 1] = torch.where(turn | stop, z, self._commands[env_ids, 1])
         self._commands[env_ids, 2] = torch.where(turn, strong_yaw, torch.where(stop, z, self._commands[env_ids, 2]))
         if self._command_override is not None:
