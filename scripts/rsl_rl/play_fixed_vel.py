@@ -37,6 +37,21 @@ parser.add_argument("--real-time", action="store_true", default=False, help="Run
 parser.add_argument("--vx", type=float, default=0.0, help="Fixed forward velocity (m/s)")
 parser.add_argument("--vy", type=float, default=0.0, help="Fixed lateral velocity (m/s)")
 parser.add_argument("--omega", type=float, default=0.0, help="Fixed yaw rate (rad/s)")
+
+# Canonical demo sequence for the seq GIF, as "vx,vy,wz:steps" at 50 Hz.
+# forward -> right 90 -> forward -> REVERSE -> left 180 -> stop.
+# Turn durations assume the measured ~0.45 rad/s achieved at a 0.5 command:
+# 90 deg = 1.571 rad -> 3.5 s = 175 steps; 180 deg -> 7.0 s = 350 steps.
+# Total is exactly 1000 steps = 20.0 s, which is episode_length_s, so the whole
+# sequence plays inside one episode and no reset cuts it short.
+DEMO_SEQ = (
+    "0.30,0,0:150;"      # forward          3.0 s
+    "0,0,-0.5:175;"      # turn right 90    3.5 s  (negative wz = clockwise)
+    "0.30,0,0:150;"      # forward          3.0 s
+    "-0.15,0,0:125;"     # REVERSE          2.5 s  (new in v2.0.0)
+    "0,0,0.5:350;"       # turn left 180    7.0 s
+    "0,0,0:50"           # stop             1.0 s
+)
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -222,10 +237,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     ev = {"vx": [], "wz": [], "tilt": [], "q_ankle": []} if eval_steps else None
     # BB_CMD_SEQ="vx,vy,wz:steps;...": step through a command sequence (for
     # the multi-command demo GIF); overrides the fixed command over time.
+    # BB_CMD_SEQ="demo" expands to DEMO_SEQ below.
     seq = []
-    if os.environ.get("BB_CMD_SEQ"):
+    raw_seq = os.environ.get("BB_CMD_SEQ")
+    if raw_seq == "demo":
+        raw_seq = DEMO_SEQ
+    if raw_seq:
         t_acc = 0
-        for part in os.environ["BB_CMD_SEQ"].split(";"):
+        for part in raw_seq.split(";"):
             cmd_s, dur = part.split(":")
             t_acc += int(dur)
             seq.append((t_acc, torch.tensor([float(x) for x in cmd_s.split(",")], device=env.unwrapped.device)))
