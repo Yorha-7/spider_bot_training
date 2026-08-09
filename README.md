@@ -22,6 +22,39 @@ Big Bertha v1.1.0: forward walk, 90° turn right, forward walk, 180° turn left 
 - **Keyboard teleoperation** — WASD + QE velocity control
 - **Checkpoint export** — JIT and ONNX
 
+## Training curves
+
+Big Bertha's policy was trained as a chain of 18 resumed runs sharing one
+iteration counter — 140,198 logged PPO iterations from scratch to v1.1.0.
+Dotted verticals mark run resumes.
+
+![learning curve](assets/figures/training_learning_curve.png)
+
+**Note on reading the return axis:** the reward function was revised several
+times over the campaign, so the step changes are largely re-weightings rather
+than the policy improving or collapsing. Returns are comparable *within* a
+segment, not across the whole run.
+
+Per-term contributions show which parts of the objective drove behaviour, and
+when terms were added — `raibert` only exists after ~107k:
+
+![reward terms](assets/figures/training_reward_terms.png)
+
+Optimizer diagnostics. Action noise ratchets from ~1 to ~2×10³ across the
+campaign (an entropy bonus with no bound on `log_std`), and the v1.1.0
+fine-tune resets it to 0.6:
+
+![optimization](assets/figures/training_optimization.png)
+
+v1.1.0 fine-tune: the noise reset, and measured performance. Both policies were
+evaluated on the *same* environment after training — training return cannot be
+used for this comparison because the reward changed at the split:
+
+![v1.1.0 fine-tune](assets/figures/training_v1_1_0_finetune.png)
+
+Regenerate with `python3 scripts/plot_training_figures.py --outdir <dir>`
+(needs the Isaac Lab conda env for `tensorboard`).
+
 ## Repository Structure
 
 ```
@@ -201,3 +234,33 @@ pip install pre-commit
 pre-commit install
 pre-commit run --all-files
 ```
+
+## References
+
+Works consulted during the v1.1.0 gait audit, grouped by what they informed.
+
+**Gait clocks and periodic reward composition** — the phase-offset foot clock
+and its reward terms:
+
+- [Sim-to-Real Learning of All Common Bipedal Gaits via Periodic Reward Composition](https://arxiv.org/abs/2011.01387)
+- [Walk These Ways: Tuning Robot Control for Generalization with Multiplicity of Behavior](https://arxiv.org/abs/2212.03238)
+- [AllGaits: Learning All Quadruped Gaits and Transitions](https://arxiv.org/html/2411.04787)
+
+**Actuator modelling and sim-to-real on low-cost hardware** — the move from an
+ideal PD actuator to a `DCMotorCfg` torque-speed curve, and the Isaac → Gazebo
+→ ROS 2 transfer path:
+
+- [Controlling the Solo12 Quadruped Robot with Deep Reinforcement Learning](https://arxiv.org/abs/2309.16683)
+- [Ask1: Development and Reinforcement Learning-Based Control of a Custom Quadruped Robot](https://arxiv.org/abs/2412.08019)
+- [Sim-to-Real Transfer for Mobile Robots with Reinforcement Learning: from NVIDIA Isaac Sim to Gazebo and Real ROS 2 Robots](https://arxiv.org/abs/2501.02902)
+
+**Reward shaping for natural, robust gaits** — the reward rebalance and the
+gating of gait terms on commanded velocity:
+
+- [Experience-Learning Inspired Two-Step Reward Method for Efficient Legged Locomotion Learning Towards Natural and Robust Gaits](https://arxiv.org/abs/2401.12389)
+- [A Learning Framework for Diverse Legged Robot Locomotion Using Barrier-Based Style Rewards](https://arxiv.org/abs/2409.15780)
+
+**Tooling**
+
+- [NVIDIA Isaac Lab](https://isaac-sim.github.io/IsaacLab) — training environments
+- [RSL-RL](https://github.com/leggedrobotics/rsl_rl) — PPO implementation
