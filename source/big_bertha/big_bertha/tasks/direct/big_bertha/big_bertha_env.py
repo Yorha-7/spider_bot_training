@@ -143,13 +143,7 @@ class BigberthaEnv(DirectRLEnv):
         resample = (self.episode_length_buf % 200) == 199
         if self._command_override is None and torch.any(resample):
             self._sample_commands(resample.nonzero(as_tuple=False).squeeze(-1))
-        # Clock cadence scales up with commanded yaw and speed (capped 2.1x),
-        # raising the max yaw rate / speed reachable by stepping instead of skidding.
-        boost = (
-            1.0
-            + self.cfg.turn_clock_boost * torch.clamp(torch.abs(self._commands[:, 2]) / 0.4, max=1.0)
-            + self.cfg.speed_clock_boost * torch.clamp(self._commands[:, 0] / 0.3, max=1.0)
-        ).clamp(max=2.1)
+        boost = self._clock_boost(self._commands[:, 0], self._commands[:, 2])
         self._gait_phase = (self._gait_phase + self.cfg.gait_frequency * boost * self.step_dt) % 1.0
         # Keep the pre-clamp action so the reward can penalise its magnitude.
         # Clamping alone gives the policy no reason to stay inside [-1, 1]: once
@@ -341,7 +335,9 @@ class BigberthaEnv(DirectRLEnv):
         p_foot_c = (self._gait_phase.unsqueeze(1) + self._gait_offsets.unsqueeze(0)) % 1.0
         # Duty ratio shrinks with commanded speed (0.75 crawl -> 0.60 at 0.3
         # m/s); reused by the clock schedule below.
-        stance_r = (0.75 - 0.15 * torch.clamp(self._commands[:, 0] / 0.3, max=1.0)).unsqueeze(1)
+        # abs(): duty ratio shrinks with commanded SPEED. Signed vx made reverse
+        # commands raise it toward 0.90, holding the feet planted even longer.
+        stance_r = (0.75 - 0.15 * torch.clamp(torch.abs(self._commands[:, 0]) / 0.3, max=1.0)).unsqueeze(1)
         mid_swing = (stance_r + 1.0) / 2.0
         mid_gate = torch.exp(-torch.square((p_foot_c - mid_swing) / 0.06))
 
@@ -378,9 +374,17 @@ class BigberthaEnv(DirectRLEnv):
         # achieved/commanded speed (forward) or yaw rate (turn-in-place) --
         # otherwise marching/skidding in place earns the full reward without
         # doing the commanded task.
-        fwd_ratio = torch.clamp(fwd_vel / torch.clamp(self._commands[:, 0], min=0.05), 0.0, 1.0)
+        # Progress along the commanded direction. The old form divided by
+        # clamp(cmd_vx, min=0.05), so a reverse command divided by +0.05 and read
+        # backward motion as ratio 0.
+        cmd_vx_g = self._commands[:, 0]
+        along_vel = fwd_vel * torch.sign(cmd_vx_g)
+        fwd_ratio = torch.clamp(along_vel / torch.clamp(torch.abs(cmd_vx_g), min=0.05), 0.0, 1.0)
         yaw_ratio = torch.clamp(ach_yaw * torch.sign(cmd_yaw) / torch.clamp(torch.abs(cmd_yaw), min=0.1), 0.0, 1.0)
-        is_forward = self._commands[:, 0] > 0.05
+        # abs(): reverse used to match neither branch and fell through to the
+        # else, where vel_gate is 1.0 unconditionally. That paid full gait reward
+        # for standing still, making reverse strictly cheaper than reversing.
+        is_forward = torch.abs(self._commands[:, 0]) > 0.05
         is_turn_in_place = (torch.abs(self._commands[:, 0]) < 0.05) & (torch.abs(cmd_yaw) > 0.1)
         vel_gate = torch.where(
             is_forward,
@@ -408,11 +412,7 @@ class BigberthaEnv(DirectRLEnv):
         # f_eff must mirror the real clock in _pre_physics_step exactly
         # (speed term + 2.1 cap); omitting the speed term overstated stride
         # ~2x at vx=0.3 and pinned the foothold target at the clamp.
-        f_eff = self.cfg.gait_frequency * (
-            1.0
-            + self.cfg.turn_clock_boost * torch.clamp(torch.abs(cmd_yaw) / 0.4, max=1.0)
-            + self.cfg.speed_clock_boost * torch.clamp(self._commands[:, 0] / 0.3, max=1.0)
-        ).clamp(max=2.1)
+        f_eff = self.cfg.gait_frequency * self._clock_boost(self._commands[:, 0], cmd_yaw)
         k_r = (0.5 * stance_r.squeeze(1) / f_eff).view(-1, 1, 1)
         neu = self._foot_neutral_b.unsqueeze(0)
         tang = torch.stack([-neu[..., 1], neu[..., 0]], dim=-1)
@@ -462,11 +462,32 @@ class BigberthaEnv(DirectRLEnv):
             self._episode_sums[key] += value
         return reward
 
+    def _clock_boost(self, cmd_vx: torch.Tensor, cmd_yaw: torch.Tensor) -> torch.Tensor:
+        """Gait cadence multiplier for a command, capped at 2.1x.
+
+        Cadence scales with how FAST the robot is asked to go, not which way, so
+        both terms take a magnitude. Reverse is a direction, not a slower speed:
+        the raw (unsigned) vx here made a reverse command throttle the clock
+        instead of running it. At cmd_vx -0.15 the cadence fell to 0.45x and at
+        -0.30 the boost went negative, so the policy was handed a near-stopped
+        clock and stepped in place. Measured achieved vx tracked this curve
+        almost exactly.
+
+        Single source of truth on purpose: this was previously written out twice,
+        once here and once as f_eff in the Raibert term, with a comment saying
+        they must match. They drifted anyway.
+        """
+        return (
+            1.0
+            + self.cfg.turn_clock_boost * torch.clamp(torch.abs(cmd_yaw) / 0.4, max=1.0)
+            + self.cfg.speed_clock_boost * torch.clamp(torch.abs(cmd_vx) / 0.3, max=1.0)
+        ).clamp(max=2.1)
+
     def _sample_commands(self, env_ids: torch.Tensor):
         """Forward-biased (vx, vy, yaw) sampling with pivot, reverse and stop cells.
 
         vx in [0, 0.4] (servo-feasible), yaw in [-0.5, 0.5]. Cell split:
-        30% pure turn-in-place, 12% reverse, 5% full stop, 53% forward.
+        30% pure turn-in-place, 20% reverse, 5% full stop, 45% forward.
         Nav2 idles between goals and reverses to recover, so both regimes are
         sampled explicitly rather than left to the tails of a uniform draw.
         """
@@ -477,7 +498,7 @@ class BigberthaEnv(DirectRLEnv):
         self._commands[env_ids, 2] = torch.empty(n, device=self.device).uniform_(-0.5, 0.5)
         draw = torch.rand(n, device=self.device)
         turn = draw < 0.30
-        rev = (draw >= 0.30) & (draw < 0.42)
+        rev = (draw >= 0.30) & (draw < 0.50)
         stop = draw > 0.95
         sign = torch.where(torch.rand(n, device=self.device) < 0.5, -1.0, 1.0)
         strong_yaw = torch.empty(n, device=self.device).uniform_(0.15, 0.4) * sign
