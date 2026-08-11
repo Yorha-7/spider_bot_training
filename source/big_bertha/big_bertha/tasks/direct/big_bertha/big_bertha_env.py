@@ -70,6 +70,9 @@ class BigberthaEnv(DirectRLEnv):
         # Sustained per-episode lateral force + yaw torque (local frame), so the
         # policy must actively hold heading/line against a steady disturbance.
         self._robot_base_id, _ = self._robot.find_bodies("base_link")
+        # Heading the robot should hold while no yaw rate is commanded. Latched
+        # at every command change and on reset (see _sample_commands/_reset_idx).
+        self._yaw_ref = torch.zeros(self.num_envs, device=self.device)
         self._lat_bias = torch.zeros(self.num_envs, device=self.device)
         self._yaw_bias = torch.zeros(self.num_envs, device=self.device)
         self._ext_force = torch.zeros(self.num_envs, 1, 3, device=self.device)
@@ -109,6 +112,8 @@ class BigberthaEnv(DirectRLEnv):
                 "gait_swing_unload",
                 "foot_clearance",
                 "multi_swing_pen",
+                "impact_pen",
+                "heading_hold_pen",
                 "track_ang_vel_z_exp",
                 "yaw_progress",
                 "yaw_straight_pen",
@@ -238,9 +243,13 @@ class BigberthaEnv(DirectRLEnv):
         # bit-identical for forward commands and makes reverse pay the same.
         cmd_vx = self._commands[:, 0]
         along_cmd = fwd_vel * torch.sign(cmd_vx)
+        # Cap at the COMMANDED speed, not a fixed 0.40. Paying up to 0.40
+        # regardless of command made overshoot free: cmd 0.12 produced 0.174
+        # and cmd -0.05 produced -0.127, because exceeding the command still
+        # earned the largest positive term in the objective.
         forward_progress = torch.where(
             cmd_vx.abs() > 0.05,
-            torch.clamp(along_cmd, min=0.0, max=0.40),
+            torch.minimum(torch.clamp(along_cmd, min=0.0), cmd_vx.abs()),
             torch.zeros_like(fwd_vel),
         )
         z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
@@ -278,6 +287,18 @@ class BigberthaEnv(DirectRLEnv):
             & (torch.abs(self._commands[:, 2]) < 0.05)
         ).float()
         stand_still_pen = torch.square(self._robot.data.root_lin_vel_b[:, 0]) * stand_gate
+        # Heading hold. stand_still_pen only penalises translation, so nothing
+        # stopped the robot coasting in yaw: measured +37 deg over 2.7 s after a
+        # 180 deg turn. Charge heading error against the yaw held at the last
+        # command change, whenever no yaw rate is commanded.
+        q = self._robot.data.root_quat_w
+        yaw_now = torch.atan2(
+            2.0 * (q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2]),
+            1.0 - 2.0 * (q[:, 2] ** 2 + q[:, 3] ** 2),
+        )
+        yaw_err = torch.atan2(torch.sin(yaw_now - self._yaw_ref), torch.cos(yaw_now - self._yaw_ref))
+        hold_gate = (torch.abs(self._commands[:, 2]) < 0.1).float()
+        heading_hold_pen = torch.square(yaw_err) * hold_gate
         joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
         joint_accel = torch.sum(torch.square(self._robot.data.joint_acc), dim=1)
         action_rate = torch.sum(torch.square(self._actions - self._previous_actions), dim=1)
@@ -325,9 +346,19 @@ class BigberthaEnv(DirectRLEnv):
         n_swing = (feet_air_c > 0.06).float().sum(dim=1)
         lead_air = torch.clamp(feet_air_c.max(dim=1).values, max=0.45) / 0.45
         single = (n_swing == 1.0).float()
-        fwd_gate = torch.clamp(fwd_vel / 0.10, 0.0, 1.0)
+        # Gate on progress ALONG the command, not along +x. With raw fwd_vel a
+        # reverse command gated this to zero, so the crawl-shaping reward never
+        # applied while reversing. Same forward-only bug class as the clock.
+        fwd_gate = torch.clamp(fwd_vel * torch.sign(self._commands[:, 0]) / 0.10, 0.0, 1.0)
         crawl_gait_reward = lead_air * single * fwd_gate
         multi_swing_pen = torch.clamp(n_swing - 1.0, min=0.0)
+        # Impact penalty. Nothing in the objective saw contact force, and the
+        # v2.0.0 gait peaked at 144 N against a 12.6 N body weight, with the
+        # rear feet both slamming and chattering. Quadratic in the excess over
+        # 3x body weight, so ordinary stance (~7 N per foot) is free and only
+        # impacts are charged.
+        foot_f_now = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)
+        impact_pen = torch.sum(torch.square(torch.clamp(foot_f_now - 37.8, min=0.0)), dim=1)
 
         # C) Swing-phase bookkeeping (clearance itself is computed below from
         # the FK tip, not the knee-origin link z it used to measure).
@@ -448,6 +479,8 @@ class BigberthaEnv(DirectRLEnv):
             "raibert": raibert * self.cfg.raibert_reward_scale * self.step_dt,
             "foot_clearance": foot_clearance_reward * self.cfg.foot_clearance_reward_scale * self.step_dt,
             "multi_swing_pen": multi_swing_pen * self.cfg.multi_swing_penalty_scale * self.step_dt,
+            "impact_pen": impact_pen * self.cfg.impact_penalty_scale * self.step_dt,
+            "heading_hold_pen": heading_hold_pen * self.cfg.heading_hold_penalty_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_reward * self.cfg.yaw_rate_reward_scale * self.step_dt,
             "yaw_progress": yaw_progress * self.cfg.yaw_progress_reward_scale * self.step_dt,
             "yaw_straight_pen": yaw_straight_pen * self.cfg.yaw_straight_penalty_scale * self.step_dt,
@@ -519,6 +552,13 @@ class BigberthaEnv(DirectRLEnv):
         self._commands[env_ids, 2] = torch.where(turn, strong_yaw, torch.where(stop, z, self._commands[env_ids, 2]))
         if self._command_override is not None:
             self._commands[env_ids] = self._command_override.to(self._commands.device)
+        # Re-latch the heading reference: holding a heading from before the
+        # command changed would penalise the turn the robot was just told to do.
+        q = self._robot.data.root_quat_w[env_ids]
+        self._yaw_ref[env_ids] = torch.atan2(
+            2.0 * (q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2]),
+            1.0 - 2.0 * (q[:, 2] ** 2 + q[:, 3] ** 2),
+        )
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
