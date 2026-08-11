@@ -40,17 +40,20 @@ parser.add_argument("--omega", type=float, default=0.0, help="Fixed yaw rate (ra
 
 # Canonical demo sequence for the seq GIF, as "vx,vy,wz:steps" at 50 Hz.
 # forward -> right 90 -> forward -> REVERSE -> left 180 -> stop.
-# Turn durations assume the measured ~0.45 rad/s achieved at a 0.5 command:
-# 90 deg = 1.571 rad -> 3.5 s = 175 steps; 180 deg -> 7.0 s = 350 steps.
+# Turn durations come from the MEASURED yaw rate, not an assumed one. The first
+# version assumed 0.45 rad/s; eval showed the policy achieves 0.536 rad/s at a
+# 0.5 command, so the turns overshot by +17.5 and +35 degrees.
+#   90 deg  = 1.571 rad / 0.536 = 2.93 s = 147 steps
+#   180 deg = 3.142 rad / 0.536 = 5.86 s = 293 steps
 # Total is exactly 1000 steps = 20.0 s, which is episode_length_s, so the whole
 # sequence plays inside one episode and no reset cuts it short.
 DEMO_SEQ = (
-    "0.30,0,0:150;"      # forward          3.0 s
-    "0,0,-0.5:175;"      # turn right 90    3.5 s  (negative wz = clockwise)
-    "0.30,0,0:150;"      # forward          3.0 s
-    "-0.15,0,0:125;"     # REVERSE          2.5 s  (new in v2.0.0)
-    "0,0,0.5:350;"       # turn left 180    7.0 s
-    "0,0,0:50"           # stop             1.0 s
+    "0.30,0,0:150;"  # forward          3.00 s
+    "0,0,-0.5:147;"  # turn right 90    2.94 s  (negative wz = clockwise)
+    "0.30,0,0:150;"  # forward          3.00 s
+    "-0.15,0,0:125;"  # REVERSE          2.50 s
+    "0,0,0.5:293;"  # turn left 180     5.86 s
+    "0,0,0:135"  # stop              2.70 s
 )
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
@@ -233,12 +236,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # BB_EVAL_STEPS=<n>: after a 250-step settle, collect n steps of metrics
     # (vx/wz tracking, tilt, per-ankle amplitude), print one JSON line, exit.
     eval_steps = int(os.environ.get("BB_EVAL_STEPS", "0"))
-    eval_skip = 250
+    # BB_EVAL_SKIP: settle steps before recording. 0 when timing a command
+    # sequence, where the phases start at step 0 and must not be skipped.
+    eval_skip = int(os.environ.get("BB_EVAL_SKIP", "250"))
     ev = {"vx": [], "wz": [], "tilt": [], "q_ankle": []} if eval_steps else None
     # BB_GAIT_DUMP=<path.npz>: also record per-foot contact and FK tip position
     # each step, for the footfall / trajectory / support-polygon plots.
     gait_dump = os.environ.get("BB_GAIT_DUMP")
-    gd = {"contact": [], "tip_b": [], "root_xy": []} if gait_dump else None
+    gd = {"contact": [], "tip_b": [], "root_xy": [], "yaw": []} if gait_dump else None
     # BB_CMD_SEQ="vx,vy,wz:steps;...": step through a command sequence (for
     # the multi-command demo GIF); overrides the fixed command over time.
     # BB_CMD_SEQ="demo" expands to DEMO_SEQ below.
@@ -299,6 +304,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     rq = robot.data.root_quat_w.unsqueeze(1).expand(-1, 4, -1)
                     gd["tip_b"].append(quat_apply_inverse(rq, rel)[0].cpu())
                     gd["root_xy"].append(robot.data.root_pos_w[0, :2].cpu())
+                    q = robot.data.root_quat_w[0].cpu()  # w,x,y,z
+                    gd["yaw"].append(
+                        torch.atan2(
+                            2 * (q[0] * q[3] + q[1] * q[2]),
+                            1 - 2 * (q[2] ** 2 + q[3] ** 2),
+                        )
+                    )
             if timestep >= eval_skip + eval_steps:
                 import json
 
@@ -310,6 +322,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                         contact=torch.stack(gd["contact"]).numpy(),
                         tip_b=torch.stack(gd["tip_b"]).numpy(),
                         root_xy=torch.stack(gd["root_xy"]).numpy(),
+                        yaw=torch.stack(gd["yaw"]).numpy(),
                         cmd=np.array([args_cli.vx, args_cli.vy, args_cli.omega]),
                         dt=1.0 / 50.0,
                     )

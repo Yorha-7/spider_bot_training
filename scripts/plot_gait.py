@@ -29,8 +29,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-# _feet_ids order in the env
-LEGS = ["FR", "FL", "RL", "RR"]
+# _feet_ids order, derived from the URDF rather than from the env comment.
+# find_bodies([arm_c_1_1..arm_c_4_1]) resolves through Revolute_113/116/119/110,
+# which sit back-left / back-right / front-right / front-left. The comment in
+# big_bertha_env.py claims FR/FL/RL/RR and is wrong; so were the leg labels in
+# symmetry.py and legged_odometry.yaml, each differently.
+LEGS = ["BL", "BR", "FR", "FL"]
 INK, MUTED = "#1f2933", "#7b8794"
 STANCE, SWING = "#3d5a80", "#e8edf2"
 ACCENT = "#c1462f"
@@ -64,8 +68,9 @@ def main(dump: str, out: str, title: str = "") -> None:
     ax.set_yticklabels(LEGS[::-1], fontsize=11, color=INK)
     ax.set_xlim(0, t[-1] * 1.10)
     ax.set_xlabel("time (s)", fontsize=10, color=MUTED)
-    ax.set_title("Footfall diagram   (filled = stance, blank = swing)",
-                 fontsize=12, color=INK, weight="bold", loc="left")
+    ax.set_title(
+        "Footfall diagram   (filled = stance, blank = swing)", fontsize=12, color=INK, weight="bold", loc="left"
+    )
     _clean(ax)
 
     # ---- 2. foot trajectories in body frame -------------------------------
@@ -87,9 +92,11 @@ def main(dump: str, out: str, title: str = "") -> None:
     ax.set_ylabel("area (cm$^2$)", fontsize=10, color=MUTED)
     nfeet = stance.sum(axis=1)
     ax.set_title(
-        f"Support polygon   (mean {area.mean()*1e4:.0f} cm2, "
-        f"{100*(nfeet<3).mean():.0f}% of time under 3 feet)",
-        fontsize=12, color=INK, weight="bold", loc="left",
+        f"Support polygon   (mean {area.mean() * 1e4:.0f} cm2, {100 * (nfeet < 3).mean():.0f}% of time under 3 feet)",
+        fontsize=12,
+        color=INK,
+        weight="bold",
+        loc="left",
     )
     _clean(ax)
 
@@ -98,9 +105,15 @@ def main(dump: str, out: str, title: str = "") -> None:
     fig.tight_layout(rect=[0, 0, 1, 0.955])
     fig.savefig(out, dpi=150, facecolor="white")
     print(f"wrote {out}")
+    nfeet = stance.sum(axis=1)
+    print(f"  mean feet loaded {nfeet.mean():.2f}   under 3 feet {100 * (nfeet < 3).mean():.0f}% of the time")
+    print(f"  peak contact force {contact.max():.0f} N   (body weight ~12.6 N)")
     for i, leg in enumerate(LEGS):
-        print(f"  {leg}: duty {stance[:, i].mean():.3f}  "
-              f"swing height {tip[:, i, 2].max() - tip[:, i, 2].min():.4f} m")
+        print(
+            f"  {leg}: duty {stance[:, i].mean():.3f}  "
+            f"swing height {tip[:, i, 2].max() - tip[:, i, 2].min():.4f} m  "
+            f"peak {contact[:, i].max():.0f} N"
+        )
 
 
 def _runs(mask):
