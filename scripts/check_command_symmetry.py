@@ -83,7 +83,13 @@ check("fp deadband: abs(cmd) <= 0.05 pays nothing", fp(-0.05, -0.127), 0.0)
 check("fp(+0.30, achieved +0.50) capped at cmd", fp(0.30, 0.50), 0.30)
 
 print("\ncrawl gate  (gait shaping must apply in reverse too)")
-gate = lambda vx, ach: max(0.0, min(ach * (1 if vx > 0 else -1) / 0.10, 1.0))
+
+
+def gate(vx, ach):
+    """crawl_gait fwd_gate: progress along the command, normalised and clamped."""
+    return max(0.0, min(ach * (1 if vx > 0 else -1) / 0.10, 1.0))
+
+
 check("gate(+0.30, achieved +0.29)", gate(0.30, 0.29), 1.0)
 check("gate(-0.15, achieved -0.15)", gate(-0.15, -0.15), 1.0)
 check("gate(-0.15, standing still) == 0", gate(-0.15, 0.0), 0.0)
