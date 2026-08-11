@@ -30,9 +30,7 @@ def check(name, a, b, tol=1e-9):
 
 def clock_boost(vx, yaw):
     return min(
-        1.0
-        + TURN_BOOST * min(abs(yaw) / 0.4, 1.0)
-        + SPEED_BOOST * min(abs(vx) / 0.3, 1.0),
+        1.0 + TURN_BOOST * min(abs(yaw) / 0.4, 1.0) + SPEED_BOOST * min(abs(vx) / 0.3, 1.0),
         2.1,
     )
 
@@ -66,7 +64,15 @@ check("vel_gate(-0.15, standing still) == 0", vel_gate(-0.15, 0.0), 0.0)
 check("vel_gate(-0.15, going FORWARD) == 0", vel_gate(-0.15, 0.15), 0.0)
 
 print("\nforward_progress  (pays along the command, either direction)")
-fp = lambda vx, ach: 0.0 if abs(vx) <= 0.05 else max(0.0, min(ach * (1 if vx > 0 else -1), 0.40))
+
+
+def fp(vx, ach):
+    """forward_progress: velocity along the commanded direction, clamped."""
+    if abs(vx) <= 0.05:
+        return 0.0
+    return max(0.0, min(ach * (1 if vx > 0 else -1), 0.40))
+
+
 check("fp(+0.30, achieved +0.29)", fp(0.30, 0.29), 0.29)
 check("fp(-0.15, achieved -0.15)", fp(-0.15, -0.15), 0.15)
 check("fp(-0.15, standing still) == 0", fp(-0.15, 0.0), 0.0)

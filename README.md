@@ -5,11 +5,71 @@ Multi-robot locomotion training using PPO on [NVIDIA Isaac Lab](https://isaac-si
 
 12-DOF spider robots trained with reinforcement learning for velocity-tracking locomotion and trot gait coordination.
 
-| Spider (SG90) | Big Bertha (MG995) |
+| Spider (SG90) | Big Bertha (MG995) v2.0.0 |
 |:---:|:---:|
-| <img src="assets/gifs/spider.gif" width="360"> | <img src="assets/gifs/big_bertha_v1.1.0.gif" width="360"> |
+| <img src="assets/gifs/spider.gif" width="360"> | <img src="verification_artifacts/big_bertha_v2.0.0_seq.gif" width="360"> |
 
-Big Bertha v1.1.0: forward walk, 90° turn right, forward walk, 180° turn left (0.29 m/s).
+Big Bertha v2.0.0: forward, turn right 90°, forward, **reverse**, turn left 180°, stop.
+
+### v2.0.0 measured performance
+
+Clean-eval (domain randomisation pinned at distribution centres), 64 envs,
+1000 steps after a 250-step settle.
+
+| command | achieved | tracking |
+|---|---|---|
+| forward 0.30 m/s | +0.287 m/s | 96% |
+| forward 0.12 m/s | +0.174 m/s | overshoots |
+| **reverse -0.15 m/s** | **-0.188 m/s** | new in v2.0.0 |
+| yaw 0.5 rad/s | +0.536 rad/s | 107% |
+
+Two changes define this release. **base_link moved to the body centre**, so yaw
+commands pivot the robot about itself rather than about one of its own legs, and
+**reverse commands work** — v1.x had never been trained on a negative `vx` and
+five separate terms treated the command as forward-only.
+
+<img src="docs/figures/base_link_move.png" width="760">
+
+### Gait diagnostics
+
+[`scripts/plot_gait.py`](scripts/plot_gait.py) produces a footfall diagram, foot-tip
+paths and support-polygon area from a `BB_GAIT_DUMP` rollout. It reads the same
+contact sensor and FK the reward terms use, so the plots and the objective agree
+by construction, and the same figure can be produced from a Gazebo or hardware
+rollout for a like-for-like comparison.
+
+| forward, cmd +0.30 | reverse, cmd -0.15 |
+|:---:|:---:|
+| <img src="docs/figures/gait_forward_v2.0.0.png" width="420"> | <img src="docs/figures/gait_reverse_v2.0.0.png" width="420"> |
+
+These exposed something the reward curves did not: despite `crawl_gait` being a
+reward term, the learned behaviour keeps only **~2.2 feet loaded** and is
+statically unstable ~75% of the time, so it is closer to a trot than a crawl.
+Peak contact force reaches **144 N against a 12.6 N body weight** under forward
+commands. Reverse is markedly gentler at 52 N peak.
+
+### Pipeline
+
+[`docs/pipeline.md`](docs/pipeline.md) documents the 52-D observation contract,
+the policy, and where Isaac, Gazebo and hardware diverge downstream of the joint
+target. That divergence is the sim-to-real story: both simulators put a
+force-producing element between the target and the joint, and hardware does not.
+
+### Known limitations
+
+- **The exported policy is still substantially clamp-saturated.** Closed-loop at
+  cmd 0.30 it sits on the clamp 89% of the time with `abs(a)` up to 26.5. That is
+  a 1000x improvement on v1.1.0 (`abs(a) ~ 2.8e4`, 100% clamped), but it is not a
+  smooth graded-target policy. Simulators hide this because their actuators
+  low-pass the target; hardware does not, so the bringup applies an EWMA before
+  the servos.
+- **Low command magnitudes overshoot in both directions.** Commanded 0.12 gives
+  0.174, commanded -0.05 gives -0.127. The policy has a preferred cruising speed
+  near 0.13-0.19 m/s and the command steers direction more than magnitude at the
+  low end. Nav2 asks for slow approach speeds and will get faster ones.
+- **Yaw drifts when commanded to stop.** Measured +37 degrees over 2.7 s
+  immediately after a 180 degree turn, so the robot coasts rather than holding
+  heading.
 
 ## Features
 
