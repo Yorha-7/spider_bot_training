@@ -286,7 +286,17 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # earns zero from it by construction. Now vel-gated (was payable in place).
     raibert_reward_scale = 4.0
     foot_clearance_reward_scale = 4.0  # FK-tip arc apex (~5 cm), vel-gated
-    multi_swing_penalty_scale = -2.0  # penalize 2+ feet airborne, enforces a 3-foot support tripod
+    # -2.0 -> -6.0. At -2.0 this lost to the speed terms and the gait ran with
+    # only ~2.2 feet loaded, front legs at duty 0.50 against rear at 0.80. One
+    # foot airborne at a time is what makes duty 0.75, i.e. an actual crawl.
+    multi_swing_penalty_scale = -6.0  # penalize 2+ feet airborne, enforces a 3-foot support tripod
+    # Quadratic in newtons above 3x body weight (37.8 N). Ordinary stance is
+    # ~7 N per foot and free; the measured 144 N peak costs ~0.067/step, which
+    # is more than forward_progress pays at full speed.
+    impact_penalty_scale = -3e-4
+    # Squared radians of heading error while no yaw rate is commanded. The
+    # measured +37 deg (0.65 rad) drift costs ~0.017/step.
+    heading_hold_penalty_scale = -2.0
     yaw_rate_reward_scale = 3.0  # tracks the commanded yaw rate
     # Linear yaw-progress reward: pays for yaw rate achieved in the commanded
     # direction (capped at |cmd|), non-saturating so the policy always commits
