@@ -235,6 +235,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     eval_steps = int(os.environ.get("BB_EVAL_STEPS", "0"))
     eval_skip = 250
     ev = {"vx": [], "wz": [], "tilt": [], "q_ankle": []} if eval_steps else None
+    # BB_GAIT_DUMP=<path.npz>: also record per-foot contact and FK tip position
+    # each step, for the footfall / trajectory / support-polygon plots.
+    gait_dump = os.environ.get("BB_GAIT_DUMP")
+    gd = {"contact": [], "tip_b": [], "root_xy": []} if gait_dump else None
     # BB_CMD_SEQ="vx,vy,wz:steps;...": step through a command sequence (for
     # the multi-command demo GIF); overrides the fixed command over time.
     # BB_CMD_SEQ="demo" expands to DEMO_SEQ below.
@@ -281,8 +285,35 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 ev["tilt"].append(tilt.mean().item())
                 # type-grouped joint order: ankles are [8:12] = legs 1..4 (FR/FL/RL/RR)
                 ev["q_ankle"].append(robot.data.joint_pos[:, 8:12].mean(dim=0).cpu())
+                if gd is not None:
+                    e = env.unwrapped
+                    f = torch.norm(e._contact_sensor.data.net_forces_w[:, e._feet_ids], dim=-1)
+                    gd["contact"].append(f[0].cpu())  # env 0, order FR/FL/RL/RR
+                    # foot tip in body frame via the same FK the reward uses
+                    from isaaclab.utils.math import quat_apply, quat_apply_inverse
+
+                    fq = robot.data.body_quat_w[:, e._feet_body_ids]
+                    fp = robot.data.body_pos_w[:, e._feet_body_ids]
+                    tip_w = fp + quat_apply(fq, e._tip_offset.expand(e.num_envs, 4, 3))
+                    rel = tip_w - robot.data.root_pos_w.unsqueeze(1)
+                    rq = robot.data.root_quat_w.unsqueeze(1).expand(-1, 4, -1)
+                    gd["tip_b"].append(quat_apply_inverse(rq, rel)[0].cpu())
+                    gd["root_xy"].append(robot.data.root_pos_w[0, :2].cpu())
             if timestep >= eval_skip + eval_steps:
                 import json
+
+                if gd is not None:
+                    import numpy as np
+
+                    np.savez(
+                        gait_dump,
+                        contact=torch.stack(gd["contact"]).numpy(),
+                        tip_b=torch.stack(gd["tip_b"]).numpy(),
+                        root_xy=torch.stack(gd["root_xy"]).numpy(),
+                        cmd=np.array([args_cli.vx, args_cli.vy, args_cli.omega]),
+                        dt=1.0 / 50.0,
+                    )
+                    print(f"BB_GAIT_DUMP written: {gait_dump}")
 
                 q = torch.stack(ev["q_ankle"])  # (T, 4)
                 amp = (q.max(dim=0).values - q.min(dim=0).values).tolist()
