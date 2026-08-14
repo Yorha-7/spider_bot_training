@@ -18,10 +18,23 @@ Clean-eval (domain randomisation pinned at distribution centres), 64 envs,
 
 | command | achieved | tracking |
 |---|---|---|
-| forward 0.30 m/s | +0.287 m/s | 96% |
-| forward 0.12 m/s | +0.174 m/s | overshoots |
-| **reverse -0.15 m/s** | **-0.188 m/s** | new in v2.0.0 |
-| yaw 0.5 rad/s | +0.536 rad/s | 107% |
+| forward 0.30 m/s | +0.240 m/s | 80% |
+| forward 0.12 m/s | +0.167 m/s | overshoots |
+| **reverse -0.15 m/s** | **-0.176 m/s** | new in v2.0.0 |
+| yaw 0.5 rad/s | +0.433 rad/s | 87% |
+
+Gait quality, measured from the FK foot tips rather than inferred from reward
+terms. v1.1.0 is the previously deployed policy, for comparison:
+
+| | v1.1.0 | v2.0.0 |
+|---|---|---|
+| peak contact force at cmd 0.12 | 238.7 N (18.9x body weight) | **92.1 N (7.3x)** |
+| peak contact force in reverse | 254.9 N (20.2x) | **116.1 N (9.2x)** |
+| yaw excursion 6 s after stop | 58.1 deg | **8.5 deg** |
+| front/rear duty spread at cmd 0.12 | 0.038 | **0.009** |
+| swing apex above the stance plane | 22.5 mm | 23.0 mm |
+| body tilt p95 | 4.5-5.8 deg | 4.3-5.8 deg |
+| reverse | **walks FORWARD when told to reverse** | tracks |
 
 Two changes define this release. **base_link moved to the body centre**, so yaw
 commands pivot the robot about itself rather than about one of its own legs, and
@@ -67,9 +80,23 @@ force-producing element between the target and the joint, and hardware does not.
   0.174, commanded -0.05 gives -0.127. The policy has a preferred cruising speed
   near 0.13-0.19 m/s and the command steers direction more than magnitude at the
   low end. Nav2 asks for slow approach speeds and will get faster ones.
-- **Yaw drifts when commanded to stop.** Measured +37 degrees over 2.7 s
-  immediately after a 180 degree turn, so the robot coasts rather than holding
-  heading.
+- **Swing clearance is capped near 23 mm, and rewards will not lift it.** The
+  clearance term peaks at a 50 mm apex, and three runs pushed its weight 4.0 ->
+  12.0 -> 20.0. The reward rose 81% across those runs; the measured apex moved
+  20.3 -> 22.7 -> 23.0 mm, i.e. 2.7 mm. Ankle amplitude also sat unchanged near
+  0.12 rad against the +-0.25 rad available. Clearance is therefore capped by
+  something structural (swing-window duration, body heave, or leg geometry) and
+  not by incentive, so further reward tuning is wasted effort. This is the one
+  metric the real robot most needs, and it is unresolved.
+- **heading_hold_pen was removed rather than tuned, because it is unlearnable.**
+  It charged `square(yaw_now - yaw_ref)`, an accumulated ABSOLUTE heading error,
+  but absolute yaw appears nowhere in the 52-D observation: `projected_gravity`
+  is invariant to rotation about the gravity vector and `ang_vel_b[2]` is the
+  yaw RATE. The actor is a plain MLP with no recurrent state, so it cannot
+  integrate that rate either. Raising the weight -2.0 -> -12.0 only made it the
+  second largest penalty in the objective while its gradient stayed noise.
+  Deleting it improved measured stop drift from 30.8 to 8.5 degrees. Heading
+  hold belongs in the outer loop, where absolute yaw exists.
 
 ## Features
 

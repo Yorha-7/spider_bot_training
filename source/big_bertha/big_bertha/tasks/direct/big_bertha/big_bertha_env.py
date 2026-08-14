@@ -231,7 +231,13 @@ class BigberthaEnv(DirectRLEnv):
         # still score highly, so the policy shuffles/marches instead of
         # translating.
         lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b[:, :2]), dim=1)
-        lin_vel_reward = torch.exp(-lin_vel_error / 0.04)
+        # Sigma 0.04 -> 0.01. At 0.04 this curve is nearly flat over the whole
+        # useful range: the measured +39% overshoot at cmd 0.12 (0.167 achieved)
+        # gives an error of 0.047, so exp(-0.047^2 / 0.04) = 0.946, a 5.4% loss.
+        # Nothing else charges for exceeding the command (forward_progress is
+        # capped at it, the crawl gate saturates below it), so overshoot was
+        # effectively free. 0.01 makes that same error cost 20%.
+        lin_vel_reward = torch.exp(-lin_vel_error / 0.01)
         # Linear (non-saturating) forward-velocity reward when commanded
         # forward, so moving always beats standing.
         fwd_vel = self._robot.data.root_lin_vel_b[:, 0]
@@ -351,7 +357,12 @@ class BigberthaEnv(DirectRLEnv):
         # applied while reversing. Same forward-only bug class as the clock.
         fwd_gate = torch.clamp(fwd_vel * torch.sign(self._commands[:, 0]) / 0.10, 0.0, 1.0)
         crawl_gait_reward = lead_air * single * fwd_gate
-        multi_swing_pen = torch.clamp(n_swing - 1.0, min=0.0)
+        # Squared, not linear. Linear is nearly flat where it matters: going
+        # from 2 airborne to 3 doubled the cost, which was not enough to buy a
+        # tripod, and v2.0.0 settled at n_swing ~2.2 (duty 0.45) after 10k
+        # iterations. Squaring makes 3 airborne cost 4x rather than 2x while
+        # leaving the 0-and-1 case free exactly as before.
+        multi_swing_pen = torch.square(torch.clamp(n_swing - 1.0, min=0.0))
         # Impact penalty. Nothing in the objective saw contact force, and the
         # v2.0.0 gait peaked at 144 N against a 12.6 N body weight, with the
         # rear feet both slamming and chattering. Quadratic in the excess over
