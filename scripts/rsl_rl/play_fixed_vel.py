@@ -47,12 +47,18 @@ parser.add_argument("--omega", type=float, default=0.0, help="Fixed yaw rate (ra
 #   180 deg = 3.142 rad / 0.536 = 5.86 s = 293 steps
 # Total is exactly 1000 steps = 20.0 s, which is episode_length_s, so the whole
 # sequence plays inside one episode and no reset cuts it short.
+# Turn durations are derived from the ACHIEVED yaw rate, not the commanded
+# one. v2.0.0 (model_192598) tracks cmd 0.5 at 0.4326 rad/s, so a 90 degree
+# turn needs 1.571/0.4326 = 3.63 s. Timing these off the command instead
+# undershoots by 17 percent, which on the previous policy's faster 0.475 rad/s
+# showed up the other way as visible overshoot in the demo gif. Re-derive these
+# whenever the turn rate changes.
 DEMO_SEQ = (
     "0.30,0,0:150;"  # forward          3.00 s
-    "0,0,-0.5:147;"  # turn right 90    2.94 s  (negative wz = clockwise)
+    "0,0,-0.5:182;"  # turn right 90    3.64 s  (negative wz = clockwise)
     "0.30,0,0:150;"  # forward          3.00 s
     "-0.15,0,0:125;"  # REVERSE          2.50 s
-    "0,0,0.5:293;"  # turn left 180     5.86 s
+    "0,0,0.5:363;"  # turn left 180     7.26 s
     "0,0,0:135"  # stop              2.70 s
 )
 # append RSL-RL cli arguments
