@@ -41,8 +41,6 @@ commands pivot the robot about itself rather than about one of its own legs, and
 **reverse commands work** — v1.x had never been trained on a negative `vx` and
 five separate terms treated the command as forward-only.
 
-<img src="docs/figures/base_link_move.png" width="760">
-
 ### Gait diagnostics
 
 [`scripts/plot_gait.py`](scripts/plot_gait.py) produces a footfall diagram, foot-tip
