@@ -7,7 +7,7 @@ Multi-robot locomotion training using PPO on [NVIDIA Isaac Lab](https://isaac-si
 
 | Spider (SG90) | Big Bertha (MG995) v2.0.0 |
 |:---:|:---:|
-| <img src="assets/gifs/spider.gif" width="360"> | <img src="verification_artifacts/big_bertha_v2.0.0_seq.gif" width="360"> |
+| <img src="assets/gifs/spider.gif" width="360"> | <img src="assets/gifs/big_bertha_v2.0.0_seq.gif" width="360"> |
 
 Big Bertha v2.0.0: forward, turn right 90°, forward, **reverse**, turn left 180°, stop.
 
@@ -43,11 +43,10 @@ five separate terms treated the command as forward-only.
 
 ### Gait diagnostics
 
-[`scripts/plot_gait.py`](scripts/plot_gait.py) produces a footfall diagram, foot-tip
-paths and support-polygon area from a `BB_GAIT_DUMP` rollout. It reads the same
-contact sensor and FK the reward terms use, so the plots and the objective agree
-by construction, and the same figure can be produced from a Gazebo or hardware
-rollout for a like-for-like comparison.
+A footfall diagram, foot-tip paths and support-polygon area from a `BB_GAIT_DUMP`
+rollout, read from the same contact sensor and FK the reward terms use, so the
+plots and the objective agree by construction. The same figures can be produced
+from a Gazebo or hardware rollout for a like-for-like comparison.
 
 | forward, cmd +0.30 | reverse, cmd -0.15 |
 |:---:|:---:|
