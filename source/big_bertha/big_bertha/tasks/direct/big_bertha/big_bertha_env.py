@@ -150,11 +150,9 @@ class BigberthaEnv(DirectRLEnv):
             self._sample_commands(resample.nonzero(as_tuple=False).squeeze(-1))
         boost = self._clock_boost(self._commands[:, 0], self._commands[:, 2])
         self._gait_phase = (self._gait_phase + self.cfg.gait_frequency * boost * self.step_dt) % 1.0
-        # Keep the pre-clamp action so the reward can penalise its magnitude.
-        # Clamping alone gives the policy no reason to stay inside [-1, 1]: once
-        # the mean saturates, every further increase costs nothing and the actor
-        # weights drift. v1.1.0 ended up emitting |a| ~ 1e4, which the clamp
-        # turned into a pure bang-bang square wave. See action_l2 below.
+        # Keep the pre-clamp action so action_l2 (below) can charge its
+        # magnitude. Clamping alone leaves over-driving free, so the actor
+        # drifts past saturation into a bang-bang square wave.
         self._raw_actions = actions.clone()
         self._actions = torch.clamp(self._raw_actions, -1.0, 1.0)
         # Per-episode horn-calibration offset rides on the target, like a real
@@ -231,28 +229,19 @@ class BigberthaEnv(DirectRLEnv):
         # still score highly, so the policy shuffles/marches instead of
         # translating.
         lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b[:, :2]), dim=1)
-        # Sigma 0.04 -> 0.01. At 0.04 this curve is nearly flat over the whole
-        # useful range: the measured +39% overshoot at cmd 0.12 (0.167 achieved)
-        # gives an error of 0.047, so exp(-0.047^2 / 0.04) = 0.946, a 5.4% loss.
-        # Nothing else charges for exceeding the command (forward_progress is
-        # capped at it, the crawl gate saturates below it), so overshoot was
-        # effectively free. 0.01 makes that same error cost 20%.
+        # Sigma 0.01, not 0.04: this is the only term that charges for EXCEEDING
+        # the command (forward_progress caps at it, the crawl gate saturates
+        # below it), and at 0.04 the curve is too flat to make overshoot hurt.
         lin_vel_reward = torch.exp(-lin_vel_error / 0.01)
         # Linear (non-saturating) forward-velocity reward when commanded
         # forward, so moving always beats standing.
         fwd_vel = self._robot.data.root_lin_vel_b[:, 0]
-        # Progress ALONG the commanded direction, not along +x. The old form
-        # gated on cmd_vx > 0.05, so a reverse command scored zero here and the
-        # largest positive term in the objective (scale 8.0) simply went absent,
-        # leaving reverse to be learned from track_lin_vel_xy_exp (3.0) alone
-        # against the full gait-shaping stack. Multiplying by sign(cmd_vx) is
-        # bit-identical for forward commands and makes reverse pay the same.
+        # Progress ALONG the command, not along +x, so reverse earns this term
+        # (the largest positive one) instead of nothing. sign() keeps forward
+        # bit-identical. Cap at the COMMANDED speed, not a fixed 0.40, or
+        # overshoot still collects the full reward.
         cmd_vx = self._commands[:, 0]
         along_cmd = fwd_vel * torch.sign(cmd_vx)
-        # Cap at the COMMANDED speed, not a fixed 0.40. Paying up to 0.40
-        # regardless of command made overshoot free: cmd 0.12 produced 0.174
-        # and cmd -0.05 produced -0.127, because exceeding the command still
-        # earned the largest positive term in the objective.
         forward_progress = torch.where(
             cmd_vx.abs() > 0.05,
             torch.minimum(torch.clamp(along_cmd, min=0.0), cmd_vx.abs()),
@@ -293,10 +282,10 @@ class BigberthaEnv(DirectRLEnv):
             & (torch.abs(self._commands[:, 2]) < 0.05)
         ).float()
         stand_still_pen = torch.square(self._robot.data.root_lin_vel_b[:, 0]) * stand_gate
-        # Heading hold. stand_still_pen only penalises translation, so nothing
-        # stopped the robot coasting in yaw: measured +37 deg over 2.7 s after a
-        # 180 deg turn. Charge heading error against the yaw held at the last
-        # command change, whenever no yaw rate is commanded.
+        # Heading hold: error against the yaw latched at the last command
+        # change, whenever no yaw rate is commanded. stand_still_pen charges
+        # translation only, so nothing else stops the robot coasting in yaw.
+        # Scale is 0.0 -- see heading_hold_penalty_scale for why it stays off.
         q = self._robot.data.root_quat_w
         yaw_now = torch.atan2(
             2.0 * (q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2]),
@@ -308,19 +297,12 @@ class BigberthaEnv(DirectRLEnv):
         joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
         joint_accel = torch.sum(torch.square(self._robot.data.joint_acc), dim=1)
         action_rate = torch.sum(torch.square(self._actions - self._previous_actions), dim=1)
-        # Penalty on the PRE-clamp action. action_rate above uses the clamped
-        # value, so once the mean saturates it reads a constant and stops
-        # penalising anything. Only the raw magnitude still carries gradient,
-        # and without this term nothing stops the actor drifting to |a| ~ 1e4.
-        # Excess beyond the clamp is what is charged for; staying inside
-        # [-1, 1] is free, so the term shapes nothing until saturation starts.
-        #
-        # LINEAR in the excess, deliberately not squared. We fine-tune from a
-        # checkpoint already sitting at |a| ~ 1e4, where a squared term is
-        # -4.8e4 per step and would blow up the first update. Linear keeps the
-        # gradient constant at the scale regardless of how far out the action
-        # is, so the pull back toward the clamp is steady and bounded from any
-        # starting magnitude.
+        # Excess of the PRE-clamp action beyond [-1, 1]. action_rate above sees
+        # the clamped value, which reads constant once the mean saturates, so
+        # only the raw magnitude still carries gradient. Inside the clamp this
+        # is free and shapes nothing. LINEAR, not squared: fine-tuning starts
+        # from a checkpoint at |a| ~ 1e4, where a squared term would blow up the
+        # first update; linear gives a bounded pull from any magnitude.
         action_excess = torch.sum(torch.clamp(torch.abs(self._raw_actions) - 1.0, min=0.0), dim=1)
         flat_orientation = torch.sum(torch.square(proj_gravity[:, :2]), dim=1)
 
@@ -352,22 +334,17 @@ class BigberthaEnv(DirectRLEnv):
         n_swing = (feet_air_c > 0.06).float().sum(dim=1)
         lead_air = torch.clamp(feet_air_c.max(dim=1).values, max=0.45) / 0.45
         single = (n_swing == 1.0).float()
-        # Gate on progress ALONG the command, not along +x. With raw fwd_vel a
-        # reverse command gated this to zero, so the crawl-shaping reward never
-        # applied while reversing. Same forward-only bug class as the clock.
+        # Gate on progress ALONG the command, not along +x, or reverse gates the
+        # crawl shaping to zero. Same forward-only bug class as the clock.
         fwd_gate = torch.clamp(fwd_vel * torch.sign(self._commands[:, 0]) / 0.10, 0.0, 1.0)
         crawl_gait_reward = lead_air * single * fwd_gate
-        # Squared, not linear. Linear is nearly flat where it matters: going
-        # from 2 airborne to 3 doubled the cost, which was not enough to buy a
-        # tripod, and v2.0.0 settled at n_swing ~2.2 (duty 0.45) after 10k
-        # iterations. Squaring makes 3 airborne cost 4x rather than 2x while
-        # leaving the 0-and-1 case free exactly as before.
+        # Squared, not linear: linear only doubles the cost from 2 airborne to 3,
+        # which never bought a tripod. Squaring makes it 4x and leaves the 0-and-1
+        # case free exactly as before.
         multi_swing_pen = torch.square(torch.clamp(n_swing - 1.0, min=0.0))
-        # Impact penalty. Nothing in the objective saw contact force, and the
-        # v2.0.0 gait peaked at 144 N against a 12.6 N body weight, with the
-        # rear feet both slamming and chattering. Quadratic in the excess over
-        # 3x body weight, so ordinary stance (~7 N per foot) is free and only
-        # impacts are charged.
+        # Impact penalty, quadratic in the excess over 3x body weight, so
+        # ordinary stance (~7 N per foot) is free. Nothing else in the objective
+        # sees contact force, and without it the feet slam and chatter.
         foot_f_now = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)
         impact_pen = torch.sum(torch.square(torch.clamp(foot_f_now - 37.8, min=0.0)), dim=1)
 
@@ -375,10 +352,9 @@ class BigberthaEnv(DirectRLEnv):
         # the FK tip, not the knee-origin link z it used to measure).
         swinging = (feet_air_c > 0.06).float()
         p_foot_c = (self._gait_phase.unsqueeze(1) + self._gait_offsets.unsqueeze(0)) % 1.0
-        # Duty ratio shrinks with commanded speed (0.75 crawl -> 0.60 at 0.3
-        # m/s); reused by the clock schedule below.
-        # abs(): duty ratio shrinks with commanded SPEED. Signed vx made reverse
-        # commands raise it toward 0.90, holding the feet planted even longer.
+        # Duty ratio shrinks with commanded SPEED (0.75 crawl -> 0.60 at 0.3
+        # m/s); reused by the clock schedule below. abs() because signed vx made
+        # reverse raise the duty toward 0.90 instead, keeping the feet planted.
         stance_r = (0.75 - 0.15 * torch.clamp(torch.abs(self._commands[:, 0]) / 0.3, max=1.0)).unsqueeze(1)
         mid_swing = (stance_r + 1.0) / 2.0
         mid_gate = torch.exp(-torch.square((p_foot_c - mid_swing) / 0.06))
@@ -416,16 +392,15 @@ class BigberthaEnv(DirectRLEnv):
         # achieved/commanded speed (forward) or yaw rate (turn-in-place) --
         # otherwise marching/skidding in place earns the full reward without
         # doing the commanded task.
-        # Progress along the commanded direction. The old form divided by
-        # clamp(cmd_vx, min=0.05), so a reverse command divided by +0.05 and read
-        # backward motion as ratio 0.
+        # Ratios are signed by the command, so reverse progress counts as
+        # progress rather than as ratio 0.
         cmd_vx_g = self._commands[:, 0]
         along_vel = fwd_vel * torch.sign(cmd_vx_g)
         fwd_ratio = torch.clamp(along_vel / torch.clamp(torch.abs(cmd_vx_g), min=0.05), 0.0, 1.0)
         yaw_ratio = torch.clamp(ach_yaw * torch.sign(cmd_yaw) / torch.clamp(torch.abs(cmd_yaw), min=0.1), 0.0, 1.0)
-        # abs(): reverse used to match neither branch and fell through to the
-        # else, where vel_gate is 1.0 unconditionally. That paid full gait reward
-        # for standing still, making reverse strictly cheaper than reversing.
+        # abs() matters here: without it reverse matches neither branch and falls
+        # through to the else, where vel_gate is 1.0 unconditionally, paying full
+        # gait reward for standing still.
         is_forward = torch.abs(self._commands[:, 0]) > 0.05
         is_turn_in_place = (torch.abs(self._commands[:, 0]) < 0.05) & (torch.abs(cmd_yaw) > 0.1)
         vel_gate = torch.where(
@@ -451,9 +426,8 @@ class BigberthaEnv(DirectRLEnv):
         tips_b = quat_apply_inverse(root_q.unsqueeze(1).expand(-1, 4, -1), rel)[..., :2]
         if self._foot_neutral_b is None:
             self._foot_neutral_b = tips_b.mean(dim=0).detach().clone()
-        # f_eff must mirror the real clock in _pre_physics_step exactly
-        # (speed term + 2.1 cap); omitting the speed term overstated stride
-        # ~2x at vx=0.3 and pinned the foothold target at the clamp.
+        # Same clock as _pre_physics_step, or the stride length is wrong and the
+        # foothold target pins at the clamp.
         f_eff = self.cfg.gait_frequency * self._clock_boost(self._commands[:, 0], cmd_yaw)
         k_r = (0.5 * stance_r.squeeze(1) / f_eff).view(-1, 1, 1)
         neu = self._foot_neutral_b.unsqueeze(0)
@@ -509,17 +483,12 @@ class BigberthaEnv(DirectRLEnv):
     def _clock_boost(self, cmd_vx: torch.Tensor, cmd_yaw: torch.Tensor) -> torch.Tensor:
         """Gait cadence multiplier for a command, capped at 2.1x.
 
-        Cadence scales with how FAST the robot is asked to go, not which way, so
-        both terms take a magnitude. Reverse is a direction, not a slower speed:
-        the raw (unsigned) vx here made a reverse command throttle the clock
-        instead of running it. At cmd_vx -0.15 the cadence fell to 0.45x and at
-        -0.30 the boost went negative, so the policy was handed a near-stopped
-        clock and stepped in place. Measured achieved vx tracked this curve
-        almost exactly.
+        Both terms take a magnitude: cadence scales with how FAST the robot is
+        asked to go, not which way. Signed vx throttles the clock on a reverse
+        command (negative boost below -0.3), which stops the robot stepping.
 
-        Single source of truth on purpose: this was previously written out twice,
-        once here and once as f_eff in the Raibert term, with a comment saying
-        they must match. They drifted anyway.
+        Called from both _pre_physics_step and the Raibert f_eff. Keep it that
+        way -- as two copies they drifted apart.
         """
         return (
             1.0
@@ -546,14 +515,11 @@ class BigberthaEnv(DirectRLEnv):
         stop = draw > 0.95
         sign = torch.where(torch.rand(n, device=self.device) < 0.5, -1.0, 1.0)
         strong_yaw = torch.empty(n, device=self.device).uniform_(0.15, 0.4) * sign
-        # Reverse cell. A dedicated cell rather than widening the uniform vx
-        # range: uniform over [-0.15, 0.40] puts most negative draws near zero,
-        # where they teach nothing. -0.15 is Nav2's BackUp recovery speed, which
-        # is the only case that actually commands reverse; faster reverse would
-        # spend policy capacity on a regime nothing asks for.
-        # vy and yaw keep their forward-cell distributions, so this cell is the
-        # exact C2 image of the forward cell (C2 maps vx -> -vx, vy -> -vy,
-        # yaw -> yaw) and the symmetry augmentation can pair the two.
+        # A dedicated cell, not a widened uniform vx range, which would put most
+        # negative draws near zero where they teach nothing. -0.15 is Nav2's
+        # BackUp recovery speed, the only thing that commands reverse. vy and yaw
+        # keep the forward-cell distributions, making this the exact C2 image of
+        # the forward cell so the symmetry augmentation can pair the two.
         reverse_vx = torch.empty(n, device=self.device).uniform_(-0.15, -0.05)
         z = torch.zeros_like(self._commands[env_ids, 0])
         self._commands[env_ids, 0] = torch.where(

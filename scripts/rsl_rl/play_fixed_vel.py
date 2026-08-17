@@ -40,19 +40,10 @@ parser.add_argument("--omega", type=float, default=0.0, help="Fixed yaw rate (ra
 
 # Canonical demo sequence for the seq GIF, as "vx,vy,wz:steps" at 50 Hz.
 # forward -> right 90 -> forward -> REVERSE -> left 180 -> stop.
-# Turn durations come from the MEASURED yaw rate, not an assumed one. The first
-# version assumed 0.45 rad/s; eval showed the policy achieves 0.536 rad/s at a
-# 0.5 command, so the turns overshot by +17.5 and +35 degrees.
-#   90 deg  = 1.571 rad / 0.536 = 2.93 s = 147 steps
-#   180 deg = 3.142 rad / 0.536 = 5.86 s = 293 steps
-# Total is exactly 1000 steps = 20.0 s, which is episode_length_s, so the whole
-# sequence plays inside one episode and no reset cuts it short.
-# Turn durations are derived from the ACHIEVED yaw rate, not the commanded
-# one. v2.0.0 (model_192598) tracks cmd 0.5 at 0.4326 rad/s, so a 90 degree
-# turn needs 1.571/0.4326 = 3.63 s. Timing these off the command instead
-# undershoots by 17 percent, which on the previous policy's faster 0.475 rad/s
-# showed up the other way as visible overshoot in the demo gif. Re-derive these
-# whenever the turn rate changes.
+# Turn durations come from the ACHIEVED yaw rate, not the commanded one: v2.0.0
+# (model_192598) tracks cmd 0.5 at 0.4326 rad/s, so 90 deg = 1.571/0.4326 =
+# 3.63 s. Timing off the command undershoots the turn by 17%. Re-derive these
+# whenever the policy's turn rate changes.
 DEMO_SEQ = (
     "0.30,0,0:150;"  # forward          3.00 s
     "0,0,-0.5:182;"  # turn right 90    3.64 s  (negative wz = clockwise)

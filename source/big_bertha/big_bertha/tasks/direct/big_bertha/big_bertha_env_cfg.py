@@ -254,9 +254,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # Reward scales. Rebalanced from the measured tfevents decomposition of
     # v1.0.0 (gait shaping outweighed the task 3.8:1 and half the gait reward
     # was payable in place): task terms up, gait terms trimmed + vel-gated.
-    # 3.0 -> 6.0 with a tighter sigma (env.py). At the old width a 39%
-    # overshoot at cmd 0.12 cost 5.4% of this term, so overspeeding was
-    # effectively free against forward_progress at 8.0.
+    # Paired with the tighter sigma in env.py; at the old width overshoot cost
+    # only ~5% here, which forward_progress (8.0) more than paid back.
     lin_vel_reward_scale = 6.0
     z_vel_reward_scale = -1.0  # heave penalty, damps body bob
     ang_vel_reward_scale = -0.10  # roll/pitch RATE penalty, keeps the lidar level
@@ -265,22 +264,18 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # forward_progress; joint accel grows quadratically with cadence).
     joint_accel_reward_scale = -3e-8
     action_rate_reward_scale = -0.05  # smoother action targets, kinder sim-to-real
-    # Charges only for action magnitude BEYOND the [-1, 1] clamp, so it is
-    # inert while the policy behaves and bites the moment it starts to
-    # saturate. v1.1.0 had no such term: the clamp made over-driving free, the
-    # actor drifted to |a| ~ 1e4, and the deployed policy became a bang-bang
-    # square wave that only walks because sim actuators low-pass it.
+    # Charges action magnitude BEYOND the [-1, 1] clamp only, so it is inert
+    # until the policy starts to saturate. Without it the clamp makes
+    # over-driving free and the actor drifts to |a| ~ 1e4 (bang-bang output).
     action_l2_reward_scale = -2e-3  # LINEAR in excess, see big_bertha_env.py
     flat_orientation_reward_scale = -5.0  # static tilt penalty, keeps the body lidar level
     # -9.0 was the largest penalty in the objective AND mis-indexed onto an
     # ankle; hips are the stride joints on this radial layout, keep it mild.
     joint_deviation_reward_scale = -3.0
     base_height_reward_scale = 2.0  # holds body near the 0.09 m standing height
-    # -0.01 -> -0.002. A real tripod needs SHORT swings (duty 0.75 means each
-    # foot is airborne a quarter of the cycle, not half), and short swings are
-    # fast ones. At -0.01 the cheapest way to satisfy multi_swing_pen was to
-    # stretch every swing instead, which is how v2.0.0 ended at duty 0.45 with
-    # 15-20 mm of clearance against a 50 mm target.
+    # Kept small on purpose: a tripod needs SHORT swings, i.e. fast joints. At
+    # -0.01 the cheap way to satisfy multi_swing_pen was to stretch every swing
+    # instead, which cost clearance (15-20 mm against a 50 mm target).
     joint_activity_reward_scale = -0.002
     # Crawl-style reinforcement: exactly one sustained swing while moving, with
     # a deliberate lead swing. Half the weight of the clock terms below, which
@@ -293,47 +288,25 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # Raibert foothold: places swing feet at velocity/yaw-shifted targets; skid
     # earns zero from it by construction. Now vel-gated (was payable in place).
     raibert_reward_scale = 4.0
-    # 12.0 -> 20.0. At 12.0 this pays 1.69, only the sixth largest reward,
-    # against gait_stance_still at 4.23. Three runs have now shown the apex is
-    # incentive-limited rather than geometry-limited: the ankles use ~0.12 rad
-    # of the +-0.25 rad available, so a quarter of their authority. 20.0 puts
-    # this in the same class as the stance terms it competes with.
+    # Large because it has to outbid the stance terms it competes with; at 12.0
+    # gait_stance_still paid 2.5x more. The apex is incentive-limited, not
+    # geometry-limited: the ankles use ~0.12 of the +-0.25 rad available.
     foot_clearance_reward_scale = 20.0  # FK-tip arc apex (~5 cm), vel-gated
-    # -6.0 -> -2.0. Measured as the LARGEST penalty in the objective (-1.61 of
-    # the v2.0.1 decomposition) and it never bought the tripod it was raised
-    # for: duty stayed ~0.45 and n_swing ~2.2 across two full runs. What it did
-    # buy was a direct tax on swing time, which is the same thing as a tax on
-    # foot clearance, the one metric the hardware actually needs. Squaring it
-    # (see big_bertha_env.py) keeps the 3-airborne case expensive while letting
-    # the ordinary 2-airborne case stop fighting the clearance term.
+    # Keep this mild. Raising it never bought the tripod (duty stayed ~0.45)
+    # and it taxes swing time, which is the same as taxing foot clearance.
+    # Squaring instead (see big_bertha_env.py) keeps 3 airborne expensive.
     multi_swing_penalty_scale = -2.0  # penalize 2+ feet airborne, squared
-    # Quadratic in newtons above 3x body weight (37.8 N). Ordinary stance is
-    # ~7 N per foot and free; the measured 144 N peak costs ~0.067/step, which
-    # is more than forward_progress pays at full speed.
-    # -3e-4 -> -2e-3. The 175 N (straight) and 208 N (turn) peaks measured on
-    # model_184600 are single-frame spikes, so at the old weight they vanished
-    # into the episodic mean: impact_pen improved from -0.0127 to -0.0104
-    # across the run while the actual peak got WORSE than the 144 N baseline.
+    # Quadratic in newtons above 3x body weight (37.8 N), so ordinary stance
+    # (~7 N per foot) is free. Peaks are single-frame spikes that wash out of
+    # the episodic mean, hence a weight this large.
     impact_penalty_scale = -2e-3
-    # Squared radians of heading error while no yaw rate is commanded. The
-    # measured +37 deg (0.65 rad) drift costs ~0.017/step.
-    # DISABLED. This term is unlearnable by construction, not underpriced.
-    # It charges square(yaw_now - yaw_ref), an accumulated ABSOLUTE heading
-    # error, but absolute yaw appears nowhere in the 52-D observation:
-    # projected_gravity is invariant to rotation about the gravity vector, and
-    # ang_vel_b[2] is the yaw RATE, the derivative. The actor is a plain MLP
-    # (256/256/128) with no recurrent state, so it cannot integrate that rate
-    # into a heading either. The policy was being charged for something it can
-    # neither see nor remember, which makes its gradient pure noise.
-    #
-    # Raising it -2.0 -> -12.0 for v2.0.1 did not make it learnable, it just
-    # made it the SECOND LARGEST penalty in the objective (-1.50 measured) and
-    # scaled the noise 6x. Both runs confirm it: flat at -2.0, flat at -12.0.
-    #
-    # Heading hold belongs in the outer loop, where absolute yaw exists and
-    # there is state to integrate with. policy_controller already implements
-    # it (heading_hold, a PI loop on odom/map yaw). yaw_straight_pen stays and
-    # still penalises yaw RATE, which IS observable.
+    # Squared radians of heading error while no yaw rate is commanded.
+    # DISABLED: unlearnable, not underpriced. Absolute yaw is not in the 52-D
+    # observation (projected_gravity is yaw-invariant, ang_vel_b[2] is the rate)
+    # and the actor is a plain MLP with no state to integrate the rate, so this
+    # gradient is noise at any weight. Heading hold lives in the outer loop
+    # instead (policy_controller.heading_hold, a PI loop on odom/map yaw).
+    # yaw_straight_pen stays, since yaw RATE IS observable.
     heading_hold_penalty_scale = 0.0
     yaw_rate_reward_scale = 3.0  # tracks the commanded yaw rate
     # Linear yaw-progress reward: pays for yaw rate achieved in the commanded
