@@ -1,0 +1,120 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="Right_leg_1_macro">
+
+  <xacro:macro name="Right_leg_1" params="prefix">
+
+    <!-- Links -->
+    <link name="${prefix}Right_Rear_hip_rigid_assembly">
+      <inertial>
+        <origin xyz="0.000282 -0.042657 0.029336" rpy="0 0 0"/>
+        <mass value="0.113372"/>
+        <inertia ixx="6.464027e-05" ixy="1.922466e-06" ixz="1.028275e-06"
+                 iyy="5.071015e-05" iyz="-1.920746e-06" izz="3.779366e-05"/>
+      </inertial>
+      <visual>
+        <origin xyz="-0.002940 -0.060503 0.026733" rpy="-1.569735 -1.570796 0.000000"/>
+        <geometry>
+          <mesh filename="package://big_bertha_description/meshes/Right_leg_1/Right_Rear_hip_rigid_assembly.obj" scale="0.01 0.01 0.01"/>
+        </geometry>
+        <material name="MG995_envelope_55g_mass_proxy"/>
+      </visual>
+      <collision>
+        <origin xyz="-0.002940 -0.060503 0.026733" rpy="-1.569735 -1.570796 0.000000"/>
+        <geometry>
+          <mesh filename="package://big_bertha_description/meshes/Right_leg_1/Right_Rear_hip_rigid_assembly_collision.stl" scale="0.01 0.01 0.01"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${prefix}Right_Rear_upper_rigid_assembly">
+      <inertial>
+        <origin xyz="0.039974 0.001496 0.026063" rpy="0 0 0"/>
+        <mass value="0.072689"/>
+        <inertia ixx="4.142454e-05" ixy="-1.075963e-06" ixz="1.850717e-10"
+                 iyy="7.981935e-05" iyz="-6.609305e-09" izz="4.488209e-05"/>
+      </inertial>
+      <visual>
+        <origin xyz="0.039984 0.001120 0.026150" rpy="-1.542802 -1.570796 0.000000"/>
+        <geometry>
+          <mesh filename="package://big_bertha_description/meshes/Right_leg_1/Right_Rear_upper_rigid_assembly.obj" scale="0.01 0.01 0.01"/>
+        </geometry>
+        <material name="ABS_solid_baseline_25pct_print_NOT_calibrated"/>
+      </visual>
+      <collision>
+        <origin xyz="0.039984 0.001120 0.026150" rpy="-1.542802 -1.570796 0.000000"/>
+        <geometry>
+          <mesh filename="package://big_bertha_description/meshes/Right_leg_1/Right_Rear_upper_rigid_assembly_collision.stl" scale="0.01 0.01 0.01"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${prefix}Right_Rear_lower_rigid_assembly">
+      <inertial>
+        <origin xyz="0.004448 0.033760 0.021975" rpy="0 0 0"/>
+        <mass value="0.131599"/>
+        <inertia ixx="2.954651e-04" ixy="-1.782987e-05" ixz="2.631258e-06"
+                 iyy="2.284013e-05" iyz="2.965424e-06" izz="2.896285e-04"/>
+      </inertial>
+      <visual>
+        <origin xyz="0.009701 0.012701 0.019496" rpy="1.570796 0.000000 -1.547065"/>
+        <geometry>
+          <mesh filename="package://big_bertha_description/meshes/Right_leg_1/Right_Rear_lower_rigid_assembly.obj" scale="0.01 0.01 0.01"/>
+        </geometry>
+        <material name="MG995_envelope_55g_mass_proxy"/>
+      </visual>
+      <collision>
+        <origin xyz="0.009701 0.012701 0.019496" rpy="1.570796 0.000000 -1.547065"/>
+        <geometry>
+          <mesh filename="package://big_bertha_description/meshes/Right_leg_1/Right_Rear_lower_rigid_assembly_collision.stl" scale="0.01 0.01 0.01"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Joints (internal to assembly) -->
+    <joint name="${prefix}right_rear_hip_pitch" type="revolute">
+      <parent link="${prefix}Right_Rear_hip_rigid_assembly"/>
+      <child link="${prefix}Right_Rear_upper_rigid_assembly"/>
+      <origin xyz="-0.026846 -0.050529 0.039200" rpy="-1.570796 0.000000 -1.569735"/>
+      <axis xyz="0.000000 0.000000 1.000000"/>
+      <limit lower="-1.221730" upper="1.570796" effort="100.0" velocity="1.00"/>
+    </joint>
+
+    <joint name="${prefix}right_rear_knee_pitch" type="revolute">
+      <parent link="${prefix}Right_Rear_upper_rigid_assembly"/>
+      <child link="${prefix}Right_Rear_lower_rigid_assembly"/>
+      <origin xyz="0.079969 0.002239 0.004400" rpy="0.000000 0.000000 0.000000"/>
+      <axis xyz="0.000000 0.000000 1.000000"/>
+      <limit lower="-1.919862" upper="0.610865" effort="100.0" velocity="1.00"/>
+    </joint>
+
+    <!-- ROS 2 control: generated generic system -->
+    <ros2_control name="${prefix}Right_leg_1_system" type="system">
+      <hardware>
+        <plugin>mock_components/GenericSystem</plugin>
+        <param name="cmd_topic">sim/Right_leg_1_system/cmd</param>
+        <param name="state_topic">sim/Right_leg_1_system/state</param>
+      </hardware>
+
+      <joint name="${prefix}right_rear_hip_pitch">
+        <command_interface name="position"/>
+        <command_interface name="velocity"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+      <joint name="${prefix}right_rear_knee_pitch">
+        <command_interface name="position"/>
+        <command_interface name="velocity"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+    </ros2_control>
+
+  </xacro:macro>
+
+</robot>

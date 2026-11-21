@@ -1,0 +1,34 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 1000
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    position_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+position_controller:
+  ros__parameters:
+    joints:
+      - Revolute_110
+      - Revolute_111
+      - Revolute_112
+      - Revolute_113
+      - Revolute_114
+      - Revolute_115
+      - Revolute_116
+      - Revolute_117
+      - Revolute_118
+      - Revolute_119
+      - Revolute_120
+      - Revolute_121
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    open_loop_control: true
+    allow_integration_in_goal_trajectories: true
+    write_op_modes:
+      - position
