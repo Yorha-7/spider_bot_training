@@ -1,10 +1,9 @@
 <?xml version="1.0"?>
 <!-- Design ledger: Big Bertha v2, for Isaac Lab and ROS. Units are metres,
-     kilograms, seconds, and radians; visual OBJ and matching full-resolution
-     collision STL meshes share the existing 0.01 scale and link-frame origin.
-     base_link is the root. Existing frames, joints, and inertials are
-     unchanged. Collision STL files preserve every triangle from their
-     corresponding visual OBJ assemblies. Visual materials are pure white. -->
+     kilograms, seconds, and radians. Full-resolution collision meshes use
+     the visual transforms; lower-leg collision proxies are expressed in
+     link-frame metres. base_link is the root. Existing frames, joints, and
+     inertials are unchanged. Visual materials are pure white. -->
 <robot name="Big_Bertha_organized_assembly">
 
   <!-- Materials -->
@@ -231,9 +230,21 @@
       <material name="MG995_envelope_55g_mass_proxy"/>
     </visual>
     <collision>
-      <origin xyz="0.009701 0.012701 0.019496" rpy="1.570796 0.000000 -1.547065"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/Right_leg_1/Right_Rear_lower_rigid_assembly.stl" scale="0.01 0.01 0.01"/>
+        <mesh filename="./meshes/Right_leg_1/Right_Rear_lower_rigid_assembly_arm_collision.stl"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="./meshes/Right_leg_1/Right_Rear_lower_rigid_assembly_servo_collision.stl"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="./meshes/Right_leg_1/Right_Rear_lower_rigid_assembly_foot_collision.stl"/>
       </geometry>
     </collision>
   </link>
@@ -253,9 +264,21 @@
       <material name="MG995_envelope_55g_mass_proxy"/>
     </visual>
     <collision>
-      <origin xyz="0.009599 -0.012779 -0.019496" rpy="-1.570796 0.000000 1.539044"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/Left_leg_1/left_rear_lower_rigid_assembly.stl" scale="0.01 0.01 0.01"/>
+        <mesh filename="./meshes/Left_leg_1/left_rear_lower_rigid_assembly_arm_collision.stl"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="./meshes/Left_leg_1/left_rear_lower_rigid_assembly_servo_collision.stl"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="./meshes/Left_leg_1/left_rear_lower_rigid_assembly_foot_collision.stl"/>
       </geometry>
     </collision>
   </link>
@@ -275,9 +298,21 @@
       <material name="MG995_envelope_55g_mass_proxy"/>
     </visual>
     <collision>
-      <origin xyz="-0.010139 -0.012355 0.019496" rpy="1.570796 0.000000 1.559621"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/Right_leg_2/right_front_lower_rigid_assembly.stl" scale="0.01 0.01 0.01"/>
+        <mesh filename="./meshes/Right_leg_2/right_front_lower_rigid_assembly_arm_collision.stl"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="./meshes/Right_leg_2/right_front_lower_rigid_assembly_servo_collision.stl"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="./meshes/Right_leg_2/right_front_lower_rigid_assembly_foot_collision.stl"/>
       </geometry>
     </collision>
   </link>
@@ -297,9 +332,21 @@
       <material name="MG995_envelope_55g_mass_proxy"/>
     </visual>
     <collision>
-      <origin xyz="-0.009821 0.012609 -0.019496" rpy="-1.570796 0.000000 -1.585095"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="./meshes/Left_leg_2/left_front_lower_rigid_assembly.stl" scale="0.01 0.01 0.01"/>
+        <mesh filename="./meshes/Left_leg_2/left_front_lower_rigid_assembly_arm_collision.stl"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="./meshes/Left_leg_2/left_front_lower_rigid_assembly_servo_collision.stl"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="./meshes/Left_leg_2/left_front_lower_rigid_assembly_foot_collision.stl"/>
       </geometry>
     </collision>
   </link>
