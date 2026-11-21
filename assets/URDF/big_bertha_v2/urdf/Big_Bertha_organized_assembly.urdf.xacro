@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+<!-- Design ledger: Big Bertha v2, for Isaac Lab and ROS. Units are metres,
+     kilograms, seconds, and radians; meshes retain their existing 0.01
+     scale. base_link is the root. Existing frames, joints, geometry, and
+     inertials are unchanged. This edit makes visual materials pure white. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="Big_Bertha_organized_assembly">
+
+  <!-- Materials (shared across all assemblies) -->
+  <material name="ABS_solid_baseline_25pct_print_NOT_calibrated">
+    <color rgba="1 1 1 1"/>
+  </material>
+  <material name="MG995_envelope_55g_mass_proxy">
+    <color rgba="1 1 1 1"/>
+  </material>
+  <material name="Steel">
+    <color rgba="1 1 1 1"/>
+  </material>
+
+  <!-- Assembly includes -->
+  <xacro:include filename="$(find big_bertha_description)/urdf/assemblies/Right_leg_1.urdf.xacro"/>
+  <xacro:include filename="$(find big_bertha_description)/urdf/assemblies/Left_leg_1.urdf.xacro"/>
+  <xacro:include filename="$(find big_bertha_description)/urdf/assemblies/Right_leg_2.urdf.xacro"/>
+  <xacro:include filename="$(find big_bertha_description)/urdf/assemblies/Left_leg_2.urdf.xacro"/>
+  <xacro:include filename="$(find big_bertha_description)/urdf/assemblies/Payload_assembly.urdf.xacro"/>
+
+  <!-- Instantiate assemblies -->
+  <xacro:Right_leg_1 prefix=""/>
+  <xacro:Left_leg_1 prefix=""/>
+  <xacro:Right_leg_2 prefix=""/>
+  <xacro:Left_leg_2 prefix=""/>
+  <xacro:Payload_assembly prefix=""/>
+
+  <!-- Mount joints (cross-assembly connections) -->
+  <!-- These define how assemblies connect to each other. -->
+  <!-- When swapping a dummy assembly with a real part, -->
+  <!-- update the include + macro call above, and adjust -->
+  <!-- parent/child link names in the mount joint below. -->
+
+  <joint name="right_rear_hip_yaw" type="revolute">
+    <parent link="base_link"/>
+    <child link="Right_Rear_hip_rigid_assembly"/>
+    <origin xyz="0.064900 -0.080200 0.008100" rpy="0.000000 0.000000 0.000000"/>
+    <axis xyz="0.000000 0.000000 1.000000"/>
+    <limit lower="-4.363323" upper="1.134464" effort="100.0" velocity="1.00"/>
+  </joint>
+
+  <joint name="left_rear_hip_yaw" type="revolute">
+    <parent link="base_link"/>
+    <child link="left_rear_hip_rigid_assembly"/>
+    <origin xyz="0.064900 0.080200 0.008100" rpy="3.141593 0.000000 0.000000"/>
+    <axis xyz="0.000000 0.000000 1.000000"/>
+    <limit lower="-1.047198" upper="1.134464" effort="100.0" velocity="1.00"/>
+  </joint>
+
+  <joint name="right_front_hip_yaw" type="revolute">
+    <parent link="base_link"/>
+    <child link="right_front_hip_rigid_assembly"/>
+    <origin xyz="-0.064900 -0.080200 0.008100" rpy="0.000000 0.000000 0.000000"/>
+    <axis xyz="0.000000 0.000000 1.000000"/>
+    <limit lower="-1.047198" upper="2.094395" effort="100.0" velocity="1.00"/>
+  </joint>
+
+  <joint name="left_front_hip_yaw" type="revolute">
+    <parent link="base_link"/>
+    <child link="left_front_hip_rigid_assembly"/>
+    <origin xyz="-0.064900 0.080200 0.008100" rpy="3.141593 0.000000 0.000000"/>
+    <axis xyz="0.000000 0.000000 1.000000"/>
+    <limit lower="-1.047198" upper="1.396263" effort="100.0" velocity="1.00"/>
+  </joint>
+
+  <!-- ROS 2 control: generated generic system -->
+  <ros2_control name="Big_Bertha_organized_assembly_system" type="system">
+    <hardware>
+      <plugin>mock_components/GenericSystem</plugin>
+      <param name="cmd_topic">sim/Big_Bertha_organized_assembly_system/cmd</param>
+      <param name="state_topic">sim/Big_Bertha_organized_assembly_system/state</param>
+    </hardware>
+
+    <joint name="left_front_hip_yaw">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+    <joint name="left_rear_hip_yaw">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+    <joint name="right_front_hip_yaw">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+    <joint name="right_rear_hip_yaw">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+  </ros2_control>
+
+</robot>

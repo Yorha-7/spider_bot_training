@@ -147,7 +147,20 @@ spider_bot_training/
 # Install the extension
 python -m pip install -e source/spider_rl
 python -m pip install -e source/big_bertha
+python -m pip install -e source/big_bertha_v2
 ```
+
+### Flat-ground asset requirement
+
+No ground-plane USD needs to be created or downloaded for the Big Bertha v2
+task. Its flat terrain is generated directly in the active USD stage, so it
+also works when NVIDIA's online asset server is unavailable.
+
+If a run instead reports a missing
+`.../Environments/Grid/default_environment.usd`, it is using Isaac Lab's
+default `GroundPlaneCfg` rather than this task's local terrain. That is a
+remote Isaac Sim asset, **not** either robot USD below; re-running the URDF
+conversion commands will not fix that error.
 
 ## URDF → USD Conversion
 
@@ -169,9 +182,17 @@ python3 "$ISAACLAB/scripts/tools/convert_urdf.py" \
   --merge-joints \
   "$SPIDER/assets/URDF/big_bertha/Spyder_mg995_description.urdf" \
   "$SPIDER/assets/usd/big_bertha/big_bertha.usd"
+
+# Big Bertha v2 (preconverted robot asset; no fixed joints to merge)
+python3 "$ISAACLAB/scripts/tools/convert_urdf.py" \
+  --joint-stiffness 0 --joint-damping 0 \
+  "$SPIDER/assets/URDF/big_bertha_v2/big_bertha_v2.urdf" \
+  "$SPIDER/assets/usd/big_bertha_v2/big_bertha_v2.usd"
 ```
 
-> USD files are tracked via Git LFS (see `.gitattributes`). After conversion, add the `.usd` file using `git lfs track`.
+> USD files are configured for Git LFS in `.gitattributes`. Big Bertha v2's
+> top-level USD also references four files in its `configuration/` directory;
+> keep all five together when sharing the asset.
 
 ## Package Commands
 

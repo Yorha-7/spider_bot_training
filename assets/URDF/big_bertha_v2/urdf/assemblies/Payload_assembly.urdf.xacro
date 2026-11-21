@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="Payload_assembly_macro">
+
+  <xacro:macro name="Payload_assembly" params="prefix">
+
+    <!-- Links -->
+    <link name="${prefix}base_link">
+      <inertial>
+        <origin xyz="-0.001304 0.000933 0.051445" rpy="0 0 0"/>
+        <mass value="4.664158"/>
+        <inertia ixx="1.375852e-02" ixy="-6.187103e-04" ixz="2.367435e-04"
+                 iyy="1.744971e-02" iyz="-9.012353e-07" izz="1.760904e-02"/>
+      </inertial>
+      <visual>
+        <origin xyz="0.000000 0.000000 0.000000" rpy="0.000000 0.000000 3.141593"/>
+        <geometry>
+          <mesh filename="package://big_bertha_description/meshes/Payload_assembly/base_link.obj" scale="0.01 0.01 0.01"/>
+        </geometry>
+        <material name="Steel"/>
+      </visual>
+      <collision>
+        <origin xyz="0.000000 0.000000 0.000000" rpy="0.000000 0.000000 3.141593"/>
+        <geometry>
+          <mesh filename="package://big_bertha_description/meshes/Payload_assembly/base_link_collision.stl" scale="0.01 0.01 0.01"/>
+        </geometry>
+      </collision>
+    </link>
+
+  </xacro:macro>
+
+</robot>

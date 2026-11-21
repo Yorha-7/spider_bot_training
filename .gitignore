@@ -8,7 +8,7 @@
 **/*.dmp
 **/.thumbs
 
-# No USD files allowed in the repo
+# Ignore generated USD files by default.
 **/*.usd
 **/*.usda
 **/*.usdc
@@ -67,6 +67,8 @@ _build
 # Tests — ignore local scratch/output but keep the committed CI-safe test suite.
 tests/*
 !tests/test_*.py
+!tests/calf_joint_trace.py
+!tests/speed_tracking_trace.py
 tests/__pycache__/
 
 # Docker history
@@ -76,5 +78,11 @@ tests/__pycache__/
 **/tactile_record/*
 **/gelsight_r15_data/*
 
-# ignore usd folder
-assets/usd/
+# Keep generated USD assets ignored except the Big Bertha v2 runtime asset.
+assets/usd/*
+!assets/usd/big_bertha_v2/
+!assets/usd/big_bertha_v2/*.usd
+!assets/usd/big_bertha_v2/configuration/
+!assets/usd/big_bertha_v2/configuration/*.usd
+assets/usd/big_bertha_v2/.asset_hash
+assets/usd/big_bertha_v2/config.yaml

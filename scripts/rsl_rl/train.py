@@ -105,6 +105,9 @@ logger = logging.getLogger(__name__)
 
 import big_bertha.tasks  # noqa: F401
 
+if args_cli.task == "big_bertha_v2":
+    import big_bertha_v2.tasks  # noqa: F401
+
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
