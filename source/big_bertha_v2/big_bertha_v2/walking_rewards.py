@@ -4,14 +4,17 @@ import torch
 
 
 def filtered_contact(force, previous_contact, on_threshold, off_threshold):
+    """Apply separate contact entry and exit force thresholds to reduce flicker."""
     return torch.where(previous_contact, force > off_threshold, force > on_threshold)
 
 
 def slip_cost(tip_speed, contact, tolerance):
+    """Average squared excess tip speed across feet that are in contact."""
     return (contact.float() * torch.relu(tip_speed - tolerance).square()).mean(dim=1)
 
 
 def height_band_cost(height, target, tolerance, error_scale):
+    """Return scaled squared height error outside the target tolerance band."""
     return (torch.relu((height - target).abs() - tolerance) / error_scale).square()
 
 

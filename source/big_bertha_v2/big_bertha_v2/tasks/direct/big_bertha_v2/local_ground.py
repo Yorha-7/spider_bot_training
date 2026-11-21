@@ -15,6 +15,7 @@ class LocalGroundTerrainImporter(TerrainImporter):
     """
 
     def import_ground_plane(self, name: str, size: tuple[float, float] = (2.0e6, 2.0e6)):
+        """Create a Z-up collision plane and bind the configured physics material."""
         path = f"{self.cfg.prim_path}/{name}"
         self.terrain_prim_paths.append(path)
 

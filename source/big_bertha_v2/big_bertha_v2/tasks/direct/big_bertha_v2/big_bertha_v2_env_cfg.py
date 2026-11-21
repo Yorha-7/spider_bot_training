@@ -155,6 +155,8 @@ class EventCfg:
 
 @configclass
 class BigberthaEnvCfg(DirectRLEnvCfg):
+    """Configure the Big Bertha v2 locomotion task, simulation, and rewards."""
+
     ###########################################################################
     ## Episode timing and policy actions
     ###########################################################################
@@ -246,6 +248,8 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     # frame provisionally; the policy uses angular velocity and gravity here.
     @configclass
     class BigBerthaSceneCfg(InteractiveSceneCfg):
+        """Configure the robot's scene sensors."""
+
         imu = ImuCfg(
             prim_path="{ENV_REGEX_NS}/Robot/base_link",
             offset=ImuCfg.OffsetCfg(

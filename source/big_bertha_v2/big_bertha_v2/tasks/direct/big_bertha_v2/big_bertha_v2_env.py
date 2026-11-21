@@ -29,6 +29,8 @@ from .big_bertha_v2_env_cfg import BigberthaEnvCfg
 
 
 class BigberthaEnv(DirectRLEnv):
+    """Direct reinforcement learning environment for Big Bertha v2 locomotion."""
+
     cfg: BigberthaEnvCfg
 
     def __init__(self, cfg: BigberthaEnvCfg, render_mode: str | None = None, **kwargs):
