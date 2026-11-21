@@ -361,7 +361,7 @@ class BigberthaEnvCfg(DirectRLEnvCfg):
     ###########################################################################
     # Applied only to contact-confirmed feet with a physically consistent tip
     # velocity.
-    foot_dragging_penalty_scale = -6.0  # squared m/s; retuned from the former linear cost
+    foot_dragging_penalty_scale = -6.0  # squared m/s; returned from the former linear cost
     foot_slip_tolerance = 0.05  # m/s
     # Hysteresis: require the higher force to enter contact, then the lower
     # force to remain in contact. This reduces flicker near the threshold.

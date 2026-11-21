@@ -89,9 +89,11 @@ class BigberthaEnv(DirectRLEnv):
             raise ValueError("Invalid diagonal gait configuration")
         if not 0 <= cfg.diagonal_alignment_minimum_progress_gate <= 1 or cfg.diagonal_alignment_reward_scale < 0:
             raise ValueError("Invalid diagonal alignment configuration")
-        if not (0 <= cfg.movement_penalty_initial <= 1
-                and 0 <= cfg.movement_tracking_low < cfg.movement_tracking_high <= 1
-                and cfg.movement_tracking_time_constant > 0):
+        if not (
+            0 <= cfg.movement_penalty_initial <= 1
+            and 0 <= cfg.movement_tracking_low < cfg.movement_tracking_high <= 1
+            and cfg.movement_tracking_time_constant > 0
+        ):
             raise ValueError("Invalid movement penalty curriculum configuration")
         self._movement_tracking_ema = torch.zeros((), device=self.device)
         self._movement_penalty_multiplier = torch.tensor(
@@ -106,9 +108,7 @@ class BigberthaEnv(DirectRLEnv):
         self._gait_offsets = torch.tensor([0.0, 0.5, 0.25, 0.75], device=self.device)
         # FR+RL swing together; FL+RR swing half a cycle later.
         self._diagonal_pair_offsets = torch.tensor([0.0, 0.5, 0.0, 0.5], device=self.device)
-        self._die_body_ids, _ = self._contact_sensor.find_bodies(
-            ["base_link", ".*_hip_rigid_assembly"]
-        )
+        self._die_body_ids, _ = self._contact_sensor.find_bodies(["base_link", ".*_hip_rigid_assembly"])
         self._tilt_cos = math.cos(math.radians(self.cfg.max_tilt_angle_deg))
         # Sustained per-episode lateral force + yaw torque (local frame), so the
         # policy must actively hold heading/line against a steady disturbance.
@@ -310,17 +310,24 @@ class BigberthaEnv(DirectRLEnv):
         base_height = self._robot.data.root_pos_w[:, 2]
         if self.cfg.base_height_penalty_enabled:
             base_height_reward = height_band_cost(
-                base_height, self.cfg.base_height_target,
-                self.cfg.base_height_tolerance, self.cfg.base_height_error_scale,
+                base_height,
+                self.cfg.base_height_target,
+                self.cfg.base_height_tolerance,
+                self.cfg.base_height_error_scale,
             )
         else:
             base_height_reward = torch.zeros_like(base_height)
         if self.cfg.movement_penalty_curriculum:
             self._movement_tracking_ema, self._movement_penalty_multiplier = update_movement_curriculum(
-                self._movement_tracking_ema, self._movement_penalty_multiplier,
-                self._commands[:, :2], root_lin_vel_b[:, :2], self.step_dt,
-                self.cfg.movement_tracking_time_constant, self.cfg.movement_penalty_initial,
-                self.cfg.movement_tracking_low, self.cfg.movement_tracking_high,
+                self._movement_tracking_ema,
+                self._movement_penalty_multiplier,
+                self._commands[:, :2],
+                root_lin_vel_b[:, :2],
+                self.step_dt,
+                self.cfg.movement_tracking_time_constant,
+                self.cfg.movement_penalty_initial,
+                self.cfg.movement_tracking_low,
+                self.cfg.movement_tracking_high,
             )
 
         # Tip velocity must use the lower-link-origin velocity because the tip
@@ -332,15 +339,21 @@ class BigberthaEnv(DirectRLEnv):
         tip_vel_xy = (foot_linvel + torch.cross(foot_angvel, r_tip, dim=-1))[..., :2]
         foot_forces = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids], dim=-1)
         contact = filtered_contact(
-            foot_forces, self._previous_foot_contact,
-            self.cfg.contact_on_threshold, self.cfg.contact_off_threshold,
+            foot_forces,
+            self._previous_foot_contact,
+            self.cfg.contact_on_threshold,
+            self.cfg.contact_off_threshold,
         )
         tip_speed = torch.norm(tip_vel_xy, dim=2)
         foot_dragging = slip_cost(tip_speed, contact, self.cfg.foot_slip_tolerance)
         contact_f = contact.float()
         self._foot_drag_sums += (
-            contact_f * torch.relu(tip_speed - self.cfg.foot_slip_tolerance).square()
-            * self.cfg.foot_dragging_penalty_scale * self._movement_penalty_multiplier * self.step_dt / 4.0
+            contact_f
+            * torch.relu(tip_speed - self.cfg.foot_slip_tolerance).square()
+            * self.cfg.foot_dragging_penalty_scale
+            * self._movement_penalty_multiplier
+            * self.step_dt
+            / 4.0
         )
         self._foot_contact_steps += contact_f
         self._foot_contact_speed_sums += tip_speed * contact_f
@@ -383,8 +396,12 @@ class BigberthaEnv(DirectRLEnv):
         self._previous_foot_contact = contact
 
         diagonal_gait, diagonal_alignment, pair_window, exact_pattern, alignment = diagonal_pair_terms(
-            contact, self._gait_phase, self._diagonal_pair_offsets,
-            self._commands[:, :2], root_lin_vel_b[:, :2], self.cfg.diagonal_gait_stance_fraction,
+            contact,
+            self._gait_phase,
+            self._diagonal_pair_offsets,
+            self._commands[:, :2],
+            root_lin_vel_b[:, :2],
+            self.cfg.diagonal_gait_stance_fraction,
             self.cfg.diagonal_alignment_minimum_progress_gate,
         )
         moving_pair = pair_window & (torch.sum(self._commands[:, :2].square(), dim=1) > 0.05**2)
@@ -556,8 +573,7 @@ class BigberthaEnv(DirectRLEnv):
                 self._foot_drag_sums[env_ids, foot_idx].mean() / self.max_episode_length_s
             )
             extras[f"Foot/contact_fraction_{foot_name}"] = (
-                self._foot_contact_steps[env_ids, foot_idx]
-                / self._foot_sample_steps[env_ids].clamp_min(1.0)
+                self._foot_contact_steps[env_ids, foot_idx] / self._foot_sample_steps[env_ids].clamp_min(1.0)
             ).mean()
             extras[f"Foot/contact_speed_mps_{foot_name}"] = (
                 self._foot_contact_speed_sums[env_ids, foot_idx]

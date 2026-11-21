@@ -44,6 +44,7 @@ import importlib.metadata as metadata
 import os
 
 import big_bertha.tasks  # noqa: F401
+
 if args_cli.task == "big_bertha_v2":
     import big_bertha_v2.tasks  # noqa: F401
 import gymnasium as gym
